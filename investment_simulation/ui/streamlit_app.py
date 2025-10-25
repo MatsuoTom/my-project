@@ -22,6 +22,7 @@ try:
         calculate_cumulative_values, NISACalculator
     )
     from investment_simulation.analysis.investment_analyzer import InvestmentAnalyzer
+    from investment_simulation.core.brand_master import get_brand_master
 except ImportError as e:
     st.error(f"モジュールのインポートエラー: {e}")
     st.stop()
@@ -51,6 +52,14 @@ st.markdown("""
 # セッション状態の初期化
 if 'nisa_data' not in st.session_state:
     st.session_state.nisa_data = load_nisa_data()
+
+if 'brand_master' not in st.session_state:
+    st.session_state.brand_master = get_brand_master()
+    # 既存データからマスタへ自動インポート
+    if not st.session_state.nisa_data.empty:
+        result = st.session_state.brand_master.import_from_dataframe(st.session_state.nisa_data)
+        if result['brands'] > 0 or result['methods'] > 0 or result['brokers'] > 0:
+            print(f"マスタへ自動インポート: 銘柄{result['brands']}件, 投資方法{result['methods']}件, 証券会社{result['brokers']}件")
 
 def main():
     # サイドバー
@@ -118,16 +127,246 @@ def main():
     st.markdown("---")
     
     # 新タブ構成
-    tab1, tab2 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "📝 銘柄登録・データ管理", 
-        "� パフォーマンス分析・積立シナリオ"
+        "🔧 マスタ管理",
+        "📊 パフォーマンス分析・積立シナリオ"
     ])
 
     with tab1:
         show_data_input()
 
     with tab2:
+        show_brand_master_management()
+
+    with tab3:
         show_performance_and_scenario()
+
+
+def show_brand_master_management():
+    """
+    銘柄マスタ管理画面
+    """
+    st.header("🔧 マスタ管理")
+    st.markdown("銘柄・投資方法・証券会社の初期登録・編集を行います。")
+    
+    master = st.session_state.brand_master
+    
+    # サブタブ
+    sub_tab1, sub_tab2, sub_tab3 = st.tabs([
+        "🏷️ 銘柄マスタ",
+        "📈 投資方法",
+        "🏦 証券会社"
+    ])
+    
+    # ========== 銘柄マスタ ==========
+    with sub_tab1:
+        st.subheader("🏷️ 銘柄マスタ")
+        
+        # 新規銘柄登録
+        with st.expander("➕ 新規銘柄登録", expanded=False):
+            col1, col2, col3, col4 = st.columns([2, 3, 2, 2])
+            with col1:
+                new_code = st.text_input("銘柄コード*", key="new_brand_code", 
+                                        help="ティッカーシンボル、ファンドコード等")
+            with col2:
+                new_name = st.text_input("銘柄名*", key="new_brand_name")
+            with col3:
+                categories = ["ETF", "投資信託", "個別株", "債券", "その他"]
+                new_category = st.selectbox("カテゴリ", categories, key="new_brand_category")
+            with col4:
+                regions = ["米国", "日本", "全世界", "先進国", "新興国", "その他"]
+                new_region = st.selectbox("地域", regions, key="new_brand_region")
+            
+            if st.button("銘柄を追加", use_container_width=True, type="primary"):
+                if new_code and new_name:
+                    if master.add_brand(new_code, new_name, new_category, new_region):
+                        st.success(f"✅ 銘柄 '{new_code}' を追加しました")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ 銘柄コード '{new_code}' は既に登録されています")
+                else:
+                    st.warning("銘柄コードと銘柄名は必須です")
+        
+        # 既存銘柄一覧
+        st.markdown("---")
+        st.subheader("📋 登録済み銘柄")
+        
+        # フィルタ
+        col1, col2 = st.columns(2)
+        with col1:
+            filter_category = st.selectbox(
+                "カテゴリで絞込",
+                ["全て"] + master.get_categories(),
+                key="filter_category"
+            )
+        with col2:
+            filter_region = st.selectbox(
+                "地域で絞込",
+                ["全て"] + master.get_regions(),
+                key="filter_region"
+            )
+        
+        # 銘柄リスト取得
+        brands = master.get_brands(
+            category=None if filter_category == "全て" else filter_category,
+            region=None if filter_region == "全て" else filter_region
+        )
+        
+        if brands:
+            # DataFrameで表示
+            df_brands = pd.DataFrame(brands)
+            df_brands = df_brands[['code', 'name', 'category', 'region']]
+            df_brands.columns = ['コード', '銘柄名', 'カテゴリ', '地域']
+            
+            edited_brands = st.data_editor(
+                df_brands,
+                use_container_width=True,
+                num_rows="dynamic",
+                column_config={
+                    "コード": st.column_config.TextColumn("コード", width="small"),
+                    "銘柄名": st.column_config.TextColumn("銘柄名", width="large"),
+                    "カテゴリ": st.column_config.SelectColumn(
+                        "カテゴリ",
+                        options=["ETF", "投資信託", "個別株", "債券", "その他"],
+                        width="small"
+                    ),
+                    "地域": st.column_config.SelectColumn(
+                        "地域",
+                        options=["米国", "日本", "全世界", "先進国", "新興国", "その他"],
+                        width="small"
+                    )
+                },
+                hide_index=True,
+                key="brand_editor"
+            )
+            
+            # 更新・削除ボタン
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                if st.button("💾 変更を保存", use_container_width=True):
+                    # 更新処理（簡易実装）
+                    for idx, row in edited_brands.iterrows():
+                        original = brands[idx]
+                        if (row['コード'] == original['code'] and 
+                            (row['銘柄名'] != original['name'] or 
+                             row['カテゴリ'] != original['category'] or 
+                             row['地域'] != original['region'])):
+                            master.update_brand(
+                                row['コード'],
+                                name=row['銘柄名'],
+                                category=row['カテゴリ'],
+                                region=row['地域']
+                            )
+                    st.success("✅ 変更を保存しました")
+                    st.rerun()
+            
+            with col2:
+                st.info(f"登録銘柄数: {len(brands)}件")
+        else:
+            st.info("該当する銘柄がありません")
+        
+        # 削除機能
+        st.markdown("---")
+        with st.expander("🗑️ 銘柄削除", expanded=False):
+            delete_code = st.selectbox(
+                "削除する銘柄を選択",
+                master.get_brand_code_list(),
+                key="delete_brand_code"
+            )
+            if st.button("削除実行", use_container_width=True, type="secondary"):
+                if master.delete_brand(delete_code):
+                    st.success(f"✅ 銘柄 '{delete_code}' を削除しました")
+                    st.rerun()
+                else:
+                    st.error(f"❌ 削除に失敗しました")
+    
+    # ========== 投資方法 ==========
+    with sub_tab2:
+        st.subheader("📈 投資方法マスタ")
+        
+        # 新規追加
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_method = st.text_input("新規投資方法", key="new_method")
+        with col2:
+            st.write("")  # スペーサー
+            st.write("")
+            if st.button("追加", key="add_method", use_container_width=True):
+                if new_method:
+                    if master.add_method(new_method):
+                        st.success(f"✅ '{new_method}' を追加しました")
+                        st.rerun()
+                    else:
+                        st.error("既に登録されています")
+                else:
+                    st.warning("投資方法名を入力してください")
+        
+        # 既存一覧
+        st.markdown("---")
+        methods = master.get_methods()
+        if methods:
+            st.write(f"**登録済み投資方法（{len(methods)}件）:**")
+            for method in methods:
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.write(f"• {method}")
+                with col2:
+                    if st.button("🗑️", key=f"del_method_{method}"):
+                        if master.delete_method(method):
+                            st.success(f"✅ '{method}' を削除しました")
+                            st.rerun()
+        else:
+            st.info("登録されている投資方法がありません")
+    
+    # ========== 証券会社 ==========
+    with sub_tab3:
+        st.subheader("🏦 証券会社マスタ")
+        
+        # 新規追加
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_broker = st.text_input("新規証券会社", key="new_broker")
+        with col2:
+            st.write("")  # スペーサー
+            st.write("")
+            if st.button("追加", key="add_broker", use_container_width=True):
+                if new_broker:
+                    if master.add_broker(new_broker):
+                        st.success(f"✅ '{new_broker}' を追加しました")
+                        st.rerun()
+                    else:
+                        st.error("既に登録されています")
+                else:
+                    st.warning("証券会社名を入力してください")
+        
+        # 既存一覧
+        st.markdown("---")
+        brokers = master.get_brokers()
+        if brokers:
+            st.write(f"**登録済み証券会社（{len(brokers)}件）:**")
+            for broker in brokers:
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.write(f"• {broker}")
+                with col2:
+                    if st.button("🗑️", key=f"del_broker_{broker}"):
+                        if master.delete_broker(broker):
+                            st.success(f"✅ '{broker}' を削除しました")
+                            st.rerun()
+        else:
+            st.info("登録されている証券会社がありません")
+    
+    # リセット機能
+    st.markdown("---")
+    with st.expander("⚠️ マスタデータのリセット", expanded=False):
+        st.warning("すべてのマスタデータをデフォルトに戻します。この操作は取り消せません。")
+        if st.button("デフォルトにリセット", type="secondary"):
+            master.reset_to_default()
+            st.success("✅ マスタデータをリセットしました")
+            st.rerun()
+
+
 def show_performance_and_scenario():
     """
     パフォーマンス分析＋積立シナリオ画面
@@ -298,31 +537,82 @@ def show_data_input():
         else:
             month = st.selectbox("月", range(1, 13), index=datetime.now().month-1)
     # 過去データから銘柄・投資方法リスト抽出
-    brand_options = []
-    method_options = []
+    master = st.session_state.brand_master
+    brand_display_options = master.get_brand_display_list()
+    brand_code_options = master.get_brand_code_list()
+    method_options = master.get_methods()
+    broker_options = master.get_brokers()
+    
+    # 過去データからも抽出（マスタにない場合に備えて）
     if not st.session_state.nisa_data.empty:
-        # 銘柄（カンマ区切りを分割してユニーク化）
         brands_raw = st.session_state.nisa_data['銘柄'].dropna().astype(str).tolist()
-        brand_options = sorted(set([b.strip() for line in brands_raw for b in line.split(',') if b.strip()]))
-        method_options = sorted(set(st.session_state.nisa_data['投資方法'].dropna().astype(str).tolist()))
+        historical_brands = sorted(set([b.strip() for line in brands_raw for b in line.split(',') if b.strip()]))
+        # マスタにない銘柄を追加
+        for b in historical_brands:
+            if b not in brand_code_options:
+                brand_code_options.append(b)
+                brand_display_options.append(b)
 
     with col3:
-        if input_mode == "継続入力（パフォーマンス）" and brand_options:
-            selected_brands = st.multiselect("銘柄（選択/追加可）", options=brand_options, default=brand_options[:1])
-            new_brand = st.text_input("新規銘柄追加（カンマ区切り可）", value="")
-            # 選択＋新規追加を合成
-            brand = ','.join(selected_brands + ([new_brand] if new_brand else []))
+        if input_mode == "継続入力（パフォーマンス）" and brand_display_options:
+            selected_brand_display = st.selectbox(
+                "銘柄選択",
+                ["新規入力"] + brand_display_options,
+                key="select_brand_input"
+            )
+            if selected_brand_display == "新規入力":
+                brand = st.text_input("新規銘柄入力（カンマ区切り可）", value="", key="manual_brand_input")
+            else:
+                # "コード: 名前" から コードを抽出
+                brand = selected_brand_display.split(':')[0].strip()
+                st.caption(f"選択: {brand}")
         else:
-            brand = st.text_input("銘柄（複数はカンマ区切り）", value="")
+            # マスタから選択または手動入力
+            brand_input_mode = st.radio(
+                "銘柄入力方法",
+                ["マスタから選択", "手動入力"],
+                horizontal=True,
+                key="brand_input_mode"
+            )
+            if brand_input_mode == "マスタから選択" and brand_display_options:
+                selected_brand_display = st.selectbox(
+                    "銘柄選択",
+                    brand_display_options,
+                    key="select_brand_master"
+                )
+                brand = selected_brand_display.split(':')[0].strip()
+            else:
+                brand = st.text_input("銘柄（複数はカンマ区切り）", value="", key="manual_brand")
+    
     with col4:
-        if input_mode == "継続入力（パフォーマンス）" and method_options:
-            method = st.selectbox("投資方法（選択/追加可）", options=["新規入力"] + method_options, index=1 if method_options else 0)
-            if method == "新規入力":
-                method = st.text_input("新規投資方法入力", value="")
+        if method_options:
+            method_input_mode = st.radio(
+                "投資方法入力",
+                ["マスタから選択", "手動入力"],
+                horizontal=True,
+                key="method_input_mode"
+            )
+            if method_input_mode == "マスタから選択":
+                method = st.selectbox("投資方法選択", method_options, key="select_method")
+            else:
+                method = st.text_input("投資方法入力", value="", key="manual_method")
         else:
-            method = st.text_input("投資方法", value="")
+            method = st.text_input("投資方法", value="", key="method_only")
+    
     with col5:
-        broker = st.text_input("証券会社", value="")
+        if broker_options:
+            broker_input_mode = st.radio(
+                "証券会社入力",
+                ["マスタから選択", "手動入力"],
+                horizontal=True,
+                key="broker_input_mode"
+            )
+            if broker_input_mode == "マスタから選択":
+                broker = st.selectbox("証券会社選択", broker_options, key="select_broker")
+            else:
+                broker = st.text_input("証券会社入力", value="", key="manual_broker")
+        else:
+            broker = st.text_input("証券会社", value="", key="broker_only")
     with col6:
         note = st.text_input("備考", value="")
     with col5:
