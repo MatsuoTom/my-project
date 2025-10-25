@@ -1,0 +1,151 @@
+{
+  "brands": [
+    {
+      "code": "TOYOTA DC",
+      "name": "TOYOTA DC",
+      "category": "その他",
+      "region": "その他",
+      "created_at": "2025-10-25T13:51:56.037281",
+      "broker": "野村証券_朋幸",
+      "account": "特定",
+      "updated_at": "2025-10-25T14:40:19.357761"
+    },
+    {
+      "code": "TOYOTA",
+      "name": "持株",
+      "category": "個別株",
+      "region": "日本",
+      "created_at": "2025-10-25T13:51:56.037281",
+      "updated_at": "2025-10-25T14:56:26.285255",
+      "broker": "野村証券_朋幸",
+      "account": NaN
+    },
+    {
+      "code": "QLD",
+      "name": "プロシェアーズ・ウルトラQQQ",
+      "broker": "楽天証券_朋幸",
+      "account": "特定",
+      "category": "ETF",
+      "region": "米国",
+      "created_at": "2025-10-25T14:38:30.169043",
+      "updated_at": "2025-10-25T14:40:19.360761"
+    },
+    {
+      "code": "emaxis-slim-sp500_Chika",
+      "name": "eMAXIS Slim 米国株式(S&P500)",
+      "broker": "楽天証券_知佳",
+      "account": "NISA",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T14:42:16.262077",
+      "updated_at": "2025-10-25T14:52:23.827967"
+    },
+    {
+      "code": "emaxis-slim-sp500_Tomo",
+      "name": "eMAXIS Slim 米国株式(S&P500)",
+      "broker": "楽天証券_朋幸",
+      "account": "積立NISA",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T14:49:04.095224"
+    },
+    {
+      "code": "emaxis-slim-allcountry_Chika",
+      "name": "eMAXIS Slim 全世界株式(オール・カントリー)",
+      "broker": "楽天証券_知佳",
+      "account": "積立NISA",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T14:49:41.520807"
+    },
+    {
+      "code": "emaxis-slim-sp500_Chika_iDeco",
+      "name": "eMAXIS Slim 米国株式(S&P500)",
+      "broker": "楽天証券_知佳",
+      "account": "積立NISA",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T14:50:35.237153"
+    },
+    {
+      "code": "FANG+_Chika",
+      "name": "iFreeNEXTFANG+インデックス",
+      "broker": "楽天証券_知佳",
+      "account": "NISA",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T14:52:43.668463"
+    },
+    {
+      "code": "emaxis-slim-sp500_Tomo_sbi",
+      "name": "eMAXIS Slim 米国株式(S&P500)",
+      "broker": "SBI証券_朋幸",
+      "account": "NISA",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T14:56:56.872450"
+    },
+    {
+      "code": "emaxis-slim-sp500_Tomo_Rakuten",
+      "name": "eMAXIS Slim 米国株式(S&P500)",
+      "broker": "楽天証券_朋幸",
+      "account": "積立NISA",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T14:57:17.658691"
+    },
+    {
+      "code": "FANG+_Tomo",
+      "name": "iFreeNEXTFANG+インデックス",
+      "broker": "SBI証券_朋幸",
+      "account": "NISA",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T14:57:59.378126"
+    },
+    {
+      "code": "FANG+_Yoshi",
+      "name": "iFreeNEXTFANG+インデックス",
+      "broker": "楽天証券_佳子",
+      "account": "NISA",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T14:58:12.408047"
+    },
+    {
+      "code": "Lever-NAS",
+      "name": "iFreeレバレッジ NASDAQ100",
+      "broker": "楽天証券_朋幸",
+      "account": "特定",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T14:59:46.708986"
+    },
+    {
+      "code": "FANG+_Tomo_spc",
+      "name": "iFreeNEXTFANG+インデックス",
+      "broker": "SBI証券_朋幸",
+      "account": "特定",
+      "category": "投資信託",
+      "region": "米国",
+      "created_at": "2025-10-25T15:00:41.891524"
+    }
+  ],
+  "methods": [
+    "新規購入",
+    "積立",
+    "スポット購入",
+    "配当再投資",
+    "企業DC",
+    "持ち株"
+  ],
+  "brokers": [
+    "SBI証券_朋幸",
+    "野村証券_朋幸",
+    "楽天証券_朋幸",
+    "楽天証券_知佳",
+    "楽天証券_佳子",
+    "野村証券"
+  ],
+  "last_updated": "2025-10-25T15:01:52.003275"
+}

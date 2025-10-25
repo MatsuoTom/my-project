@@ -165,22 +165,30 @@ def show_brand_master_management():
         
         # 新規銘柄登録
         with st.expander("➕ 新規銘柄登録", expanded=False):
-            col1, col2, col3, col4 = st.columns([2, 3, 2, 2])
+            col1, col2 = st.columns(2)
             with col1:
                 new_code = st.text_input("銘柄コード*", key="new_brand_code", 
                                         help="ティッカーシンボル、ファンドコード等")
             with col2:
                 new_name = st.text_input("銘柄名*", key="new_brand_name")
+            
+            col3, col4, col5, col6 = st.columns(4)
             with col3:
+                broker_options = master.get_brokers()
+                new_broker = st.selectbox("証券会社", [""] + broker_options, key="new_brand_broker")
+            with col4:
+                account_options = ["積立NISA", "特定", "NISA"]
+                new_account = st.selectbox("口座", account_options, key="new_brand_account", index=1)
+            with col5:
                 categories = ["ETF", "投資信託", "個別株", "債券", "その他"]
                 new_category = st.selectbox("カテゴリ", categories, key="new_brand_category")
-            with col4:
+            with col6:
                 regions = ["米国", "日本", "全世界", "先進国", "新興国", "その他"]
                 new_region = st.selectbox("地域", regions, key="new_brand_region")
             
             if st.button("銘柄を追加", use_container_width=True, type="primary"):
                 if new_code and new_name:
-                    if master.add_brand(new_code, new_name, new_category, new_region):
+                    if master.add_brand(new_code, new_name, new_broker, new_account, new_category, new_region):
                         st.success(f"✅ 銘柄 '{new_code}' を追加しました")
                         st.rerun()
                     else:
@@ -216,22 +224,45 @@ def show_brand_master_management():
         if brands:
             # DataFrameで表示
             df_brands = pd.DataFrame(brands)
-            df_brands = df_brands[['code', 'name', 'category', 'region']]
-            df_brands.columns = ['コード', '銘柄名', 'カテゴリ', '地域']
+            # 必要なカラムのみ選択（存在確認）
+            display_cols = ['code', 'name', 'broker', 'account', 'category', 'region']
+            available_cols = [col for col in display_cols if col in df_brands.columns]
+            df_brands = df_brands[available_cols]
+            
+            # カラム名を日本語に変更
+            col_mapping = {
+                'code': 'コード',
+                'name': '銘柄名',
+                'broker': '証券会社',
+                'account': '口座',
+                'category': 'カテゴリ',
+                'region': '地域'
+            }
+            df_brands.columns = [col_mapping.get(col, col) for col in df_brands.columns]
             
             edited_brands = st.data_editor(
                 df_brands,
                 use_container_width=True,
-                num_rows="dynamic",
+                num_rows="fixed",
                 column_config={
-                    "コード": st.column_config.TextColumn("コード", width="small"),
+                    "コード": st.column_config.TextColumn("コード", width="small", disabled=True),
                     "銘柄名": st.column_config.TextColumn("銘柄名", width="large"),
-                    "カテゴリ": st.column_config.SelectColumn(
+                    "証券会社": st.column_config.SelectboxColumn(
+                        "証券会社",
+                        options=[""] + master.get_brokers(),
+                        width="medium"
+                    ),
+                    "口座": st.column_config.SelectboxColumn(
+                        "口座",
+                        options=["積立NISA", "特定", "NISA"],
+                        width="small"
+                    ),
+                    "カテゴリ": st.column_config.SelectboxColumn(
                         "カテゴリ",
                         options=["ETF", "投資信託", "個別株", "債券", "その他"],
                         width="small"
                     ),
-                    "地域": st.column_config.SelectColumn(
+                    "地域": st.column_config.SelectboxColumn(
                         "地域",
                         options=["米国", "日本", "全世界", "先進国", "新興国", "その他"],
                         width="small"
@@ -245,19 +276,26 @@ def show_brand_master_management():
             col1, col2 = st.columns([1, 4])
             with col1:
                 if st.button("💾 変更を保存", use_container_width=True):
-                    # 更新処理（簡易実装）
-                    for idx, row in edited_brands.iterrows():
+                    # 更新処理
+                    for idx in range(len(edited_brands)):
+                        row = edited_brands.iloc[idx]
                         original = brands[idx]
-                        if (row['コード'] == original['code'] and 
-                            (row['銘柄名'] != original['name'] or 
-                             row['カテゴリ'] != original['category'] or 
-                             row['地域'] != original['region'])):
-                            master.update_brand(
-                                row['コード'],
-                                name=row['銘柄名'],
-                                category=row['カテゴリ'],
-                                region=row['地域']
-                            )
+                        if row['コード'] == original['code']:
+                            # 変更があった場合のみ更新
+                            changes = {}
+                            if '銘柄名' in row and row['銘柄名'] != original.get('name'):
+                                changes['name'] = row['銘柄名']
+                            if '証券会社' in row and row['証券会社'] != original.get('broker', ''):
+                                changes['broker'] = row['証券会社']
+                            if '口座' in row and row['口座'] != original.get('account', '特定'):
+                                changes['account'] = row['口座']
+                            if 'カテゴリ' in row and row['カテゴリ'] != original.get('category'):
+                                changes['category'] = row['カテゴリ']
+                            if '地域' in row and row['地域'] != original.get('region'):
+                                changes['region'] = row['地域']
+                            
+                            if changes:
+                                master.update_brand(row['コード'], **changes)
                     st.success("✅ 変更を保存しました")
                     st.rerun()
             

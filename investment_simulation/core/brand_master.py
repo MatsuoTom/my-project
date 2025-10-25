@@ -83,14 +83,14 @@ class BrandMaster:
     def _initialize_default_data(self):
         """デフォルトマスタデータの初期化"""
         self.brands = [
-            {"code": "VTI", "name": "Vanguard Total Stock Market ETF", "category": "ETF", "region": "米国"},
-            {"code": "VOO", "name": "Vanguard S&P 500 ETF", "category": "ETF", "region": "米国"},
-            {"code": "VT", "name": "Vanguard Total World Stock ETF", "category": "ETF", "region": "全世界"},
-            {"code": "1655", "name": "iシェアーズ S&P500米国株ETF", "category": "ETF", "region": "米国"},
-            {"code": "2558", "name": "MAXIS米国株式(S&P500)上場投信", "category": "ETF", "region": "米国"},
-            {"code": "emaxis-slim-sp500", "name": "eMAXIS Slim 米国株式(S&P500)", "category": "投資信託", "region": "米国"},
-            {"code": "emaxis-slim-allcountry", "name": "eMAXIS Slim 全世界株式(オール・カントリー)", "category": "投資信託", "region": "全世界"},
-            {"code": "楽天VTI", "name": "楽天・全米株式インデックス・ファンド", "category": "投資信託", "region": "米国"},
+            {"code": "VTI", "name": "Vanguard Total Stock Market ETF", "broker": "SBI証券", "account": "積立NISA", "category": "ETF", "region": "米国"},
+            {"code": "VOO", "name": "Vanguard S&P 500 ETF", "broker": "SBI証券", "account": "特定", "category": "ETF", "region": "米国"},
+            {"code": "VT", "name": "Vanguard Total World Stock ETF", "broker": "楽天証券", "account": "積立NISA", "category": "ETF", "region": "全世界"},
+            {"code": "1655", "name": "iシェアーズ S&P500米国株ETF", "broker": "SBI証券", "account": "NISA", "category": "ETF", "region": "米国"},
+            {"code": "2558", "name": "MAXIS米国株式(S&P500)上場投信", "broker": "楽天証券", "account": "NISA", "category": "ETF", "region": "米国"},
+            {"code": "emaxis-slim-sp500", "name": "eMAXIS Slim 米国株式(S&P500)", "broker": "SBI証券", "account": "積立NISA", "category": "投資信託", "region": "米国"},
+            {"code": "emaxis-slim-allcountry", "name": "eMAXIS Slim 全世界株式(オール・カントリー)", "broker": "楽天証券", "account": "積立NISA", "category": "投資信託", "region": "全世界"},
+            {"code": "楽天VTI", "name": "楽天・全米株式インデックス・ファンド", "broker": "楽天証券", "account": "積立NISA", "category": "投資信託", "region": "米国"},
         ]
         
         self.methods = [
@@ -133,13 +133,16 @@ class BrandMaster:
         
         return result
     
-    def add_brand(self, code: str, name: str, category: str = "その他", region: str = "その他") -> bool:
+    def add_brand(self, code: str, name: str, broker: str = "", account: str = "特定", 
+                  category: str = "その他", region: str = "その他") -> bool:
         """
         銘柄の追加
         
         Args:
             code: 銘柄コード（ティッカーシンボル等）
             name: 銘柄名
+            broker: 証券会社
+            account: 口座種別（積立NISA/特定/NISA）
             category: カテゴリ
             region: 地域
         
@@ -154,6 +157,8 @@ class BrandMaster:
         brand = {
             'code': code,
             'name': name,
+            'broker': broker,
+            'account': account,
             'category': category,
             'region': region,
             'created_at': datetime.now().isoformat()
@@ -162,14 +167,17 @@ class BrandMaster:
         self.brands.append(brand)
         return self._save_master()
     
-    def update_brand(self, code: str, name: Optional[str] = None, 
-                     category: Optional[str] = None, region: Optional[str] = None) -> bool:
+    def update_brand(self, code: str, name: Optional[str] = None, broker: Optional[str] = None,
+                     account: Optional[str] = None, category: Optional[str] = None, 
+                     region: Optional[str] = None) -> bool:
         """
         銘柄情報の更新
         
         Args:
             code: 銘柄コード
             name: 新しい銘柄名（Noneの場合は変更なし）
+            broker: 新しい証券会社（Noneの場合は変更なし）
+            account: 新しい口座種別（Noneの場合は変更なし）
             category: 新しいカテゴリ（Noneの場合は変更なし）
             region: 新しい地域（Noneの場合は変更なし）
         
@@ -180,6 +188,10 @@ class BrandMaster:
             if brand['code'] == code:
                 if name is not None:
                     brand['name'] = name
+                if broker is not None:
+                    brand['broker'] = broker
+                if account is not None:
+                    brand['account'] = account
                 if category is not None:
                     brand['category'] = category
                 if region is not None:
@@ -332,6 +344,16 @@ class BrandMaster:
         """登録されている全地域の取得"""
         return sorted(set(b.get('region', 'その他') for b in self.brands))
     
+    def get_accounts(self) -> List[str]:
+        """登録されている全口座種別の取得"""
+        accounts = set(b.get('account', '特定') for b in self.brands)
+        # 標準的な口座種別を優先順で返す
+        standard_accounts = ['積立NISA', 'NISA', '特定']
+        result = [acc for acc in standard_accounts if acc in accounts]
+        # その他の口座種別を追加
+        result.extend(sorted(acc for acc in accounts if acc not in standard_accounts))
+        return result
+    
     # ========== 一括操作 ==========
     
     def import_from_dataframe(self, df: pd.DataFrame) -> Dict[str, int]:
@@ -357,6 +379,8 @@ class BrandMaster:
                         self.brands.append({
                             'code': code,
                             'name': code,
+                            'broker': '',
+                            'account': '特定',
                             'category': 'その他',
                             'region': 'その他',
                             'created_at': datetime.now().isoformat()

@@ -60,25 +60,26 @@ class TestBrandManagement:
     
     def test_add_brand_success(self, brand_master):
         """銘柄の追加が成功する"""
-        result = brand_master.add_brand("AAPL", "Apple Inc.", "個別株", "米国")
+        result = brand_master.add_brand("AAPL", "Apple Inc.", "SBI証券", "特定", "個別株", "米国")
         assert result is True
         assert any(b['code'] == "AAPL" for b in brand_master.brands)
     
     def test_add_brand_duplicate(self, brand_master):
         """重複する銘柄コードは追加できない"""
-        brand_master.add_brand("AAPL", "Apple Inc.", "個別株", "米国")
-        result = brand_master.add_brand("AAPL", "Apple Inc. 2", "個別株", "米国")
+        brand_master.add_brand("AAPL", "Apple Inc.", "SBI証券", "特定", "個別株", "米国")
+        result = brand_master.add_brand("AAPL", "Apple Inc. 2", "楽天証券", "NISA", "個別株", "米国")
         assert result is False
     
     def test_update_brand_success(self, brand_master):
         """銘柄情報の更新が成功する"""
-        brand_master.add_brand("AAPL", "Apple Inc.", "個別株", "米国")
-        result = brand_master.update_brand("AAPL", name="Apple Corp.", category="ETF")
+        brand_master.add_brand("AAPL", "Apple Inc.", "SBI証券", "特定", "個別株", "米国")
+        result = brand_master.update_brand("AAPL", name="Apple Corp.", category="ETF", account="NISA")
         assert result is True
         
         brand = brand_master.find_brand_by_code("AAPL")
         assert brand['name'] == "Apple Corp."
         assert brand['category'] == "ETF"
+        assert brand['account'] == "NISA"
     
     def test_update_brand_not_found(self, brand_master):
         """存在しない銘柄の更新は失敗する"""
@@ -87,7 +88,7 @@ class TestBrandManagement:
     
     def test_delete_brand_success(self, brand_master):
         """銘柄の削除が成功する"""
-        brand_master.add_brand("AAPL", "Apple Inc.", "個別株", "米国")
+        brand_master.add_brand("AAPL", "Apple Inc.", "SBI証券", "特定", "個別株", "米国")
         original_count = len(brand_master.brands)
         
         result = brand_master.delete_brand("AAPL")
@@ -107,23 +108,23 @@ class TestBrandManagement:
     
     def test_get_brands_with_category_filter(self, brand_master):
         """カテゴリでフィルタして銘柄を取得"""
-        brand_master.add_brand("TEST1", "Test 1", "ETF", "米国")
-        brand_master.add_brand("TEST2", "Test 2", "投資信託", "米国")
+        brand_master.add_brand("TEST1", "Test 1", "", "特定", "ETF", "米国")
+        brand_master.add_brand("TEST2", "Test 2", "", "NISA", "投資信託", "米国")
         
         etf_brands = brand_master.get_brands(category="ETF")
         assert all(b['category'] == "ETF" for b in etf_brands)
     
     def test_get_brands_with_region_filter(self, brand_master):
         """地域でフィルタして銘柄を取得"""
-        brand_master.add_brand("TEST1", "Test 1", "ETF", "米国")
-        brand_master.add_brand("TEST2", "Test 2", "ETF", "日本")
+        brand_master.add_brand("TEST1", "Test 1", "SBI証券", "特定", "ETF", "米国")
+        brand_master.add_brand("TEST2", "Test 2", "楽天証券", "NISA", "ETF", "日本")
         
         us_brands = brand_master.get_brands(region="米国")
         assert all(b['region'] == "米国" for b in us_brands)
     
     def test_find_brand_by_code_success(self, brand_master):
         """銘柄コードで検索が成功する"""
-        brand_master.add_brand("AAPL", "Apple Inc.", "個別株", "米国")
+        brand_master.add_brand("AAPL", "Apple Inc.", "SBI証券", "特定", "個別株", "米国")
         brand = brand_master.find_brand_by_code("AAPL")
         assert brand is not None
         assert brand['code'] == "AAPL"
@@ -136,13 +137,13 @@ class TestBrandManagement:
     
     def test_get_brand_display_list(self, brand_master):
         """表示用銘柄リストを取得"""
-        brand_master.add_brand("AAPL", "Apple Inc.", "個別株", "米国")
+        brand_master.add_brand("AAPL", "Apple Inc.", "SBI証券", "特定", "個別株", "米国")
         display_list = brand_master.get_brand_display_list()
         assert any("AAPL: Apple Inc." in item for item in display_list)
     
     def test_get_brand_code_list(self, brand_master):
         """銘柄コードリストを取得"""
-        brand_master.add_brand("AAPL", "Apple Inc.", "個別株", "米国")
+        brand_master.add_brand("AAPL", "Apple Inc.", "SBI証券", "特定", "個別株", "米国")
         code_list = brand_master.get_brand_code_list()
         assert "AAPL" in code_list
 
@@ -216,7 +217,7 @@ class TestBrokerManagement:
 
 
 class TestCategoryAndRegion:
-    """カテゴリ・地域取得のテスト"""
+    """カテゴリ・地域・口座取得のテスト"""
     
     def test_get_categories(self, brand_master):
         """カテゴリリストを取得"""
@@ -229,6 +230,12 @@ class TestCategoryAndRegion:
         regions = brand_master.get_regions()
         assert isinstance(regions, list)
         assert "米国" in regions or "全世界" in regions
+    
+    def test_get_accounts(self, brand_master):
+        """口座種別リストを取得"""
+        accounts = brand_master.get_accounts()
+        assert isinstance(accounts, list)
+        assert "積立NISA" in accounts or "NISA" in accounts or "特定" in accounts
 
 
 class TestBulkOperations:
