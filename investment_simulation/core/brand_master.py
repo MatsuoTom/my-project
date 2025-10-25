@@ -83,14 +83,14 @@ class BrandMaster:
     def _initialize_default_data(self):
         """デフォルトマスタデータの初期化"""
         self.brands = [
-            {"code": "VTI", "name": "Vanguard Total Stock Market ETF", "broker": "SBI証券", "account": "積立NISA", "category": "ETF", "region": "米国"},
-            {"code": "VOO", "name": "Vanguard S&P 500 ETF", "broker": "SBI証券", "account": "特定", "category": "ETF", "region": "米国"},
-            {"code": "VT", "name": "Vanguard Total World Stock ETF", "broker": "楽天証券", "account": "積立NISA", "category": "ETF", "region": "全世界"},
-            {"code": "1655", "name": "iシェアーズ S&P500米国株ETF", "broker": "SBI証券", "account": "NISA", "category": "ETF", "region": "米国"},
-            {"code": "2558", "name": "MAXIS米国株式(S&P500)上場投信", "broker": "楽天証券", "account": "NISA", "category": "ETF", "region": "米国"},
-            {"code": "emaxis-slim-sp500", "name": "eMAXIS Slim 米国株式(S&P500)", "broker": "SBI証券", "account": "積立NISA", "category": "投資信託", "region": "米国"},
-            {"code": "emaxis-slim-allcountry", "name": "eMAXIS Slim 全世界株式(オール・カントリー)", "broker": "楽天証券", "account": "積立NISA", "category": "投資信託", "region": "全世界"},
-            {"code": "楽天VTI", "name": "楽天・全米株式インデックス・ファンド", "broker": "楽天証券", "account": "積立NISA", "category": "投資信託", "region": "米国"},
+            {"code": "VTI", "name": "Vanguard Total Stock Market ETF", "broker": "SBI証券", "account": "積立NISA", "category": "ETF", "region": "米国", "current_price": 0.0, "profit": 0.0, "investment_date": ""},
+            {"code": "VOO", "name": "Vanguard S&P 500 ETF", "broker": "SBI証券", "account": "特定", "category": "ETF", "region": "米国", "current_price": 0.0, "profit": 0.0, "investment_date": ""},
+            {"code": "VT", "name": "Vanguard Total World Stock ETF", "broker": "楽天証券", "account": "積立NISA", "category": "ETF", "region": "全世界", "current_price": 0.0, "profit": 0.0, "investment_date": ""},
+            {"code": "1655", "name": "iシェアーズ S&P500米国株ETF", "broker": "SBI証券", "account": "NISA", "category": "ETF", "region": "米国", "current_price": 0.0, "profit": 0.0, "investment_date": ""},
+            {"code": "2558", "name": "MAXIS米国株式(S&P500)上場投信", "broker": "楽天証券", "account": "NISA", "category": "ETF", "region": "米国", "current_price": 0.0, "profit": 0.0, "investment_date": ""},
+            {"code": "emaxis-slim-sp500", "name": "eMAXIS Slim 米国株式(S&P500)", "broker": "SBI証券", "account": "積立NISA", "category": "投資信託", "region": "米国", "current_price": 0.0, "profit": 0.0, "investment_date": ""},
+            {"code": "emaxis-slim-allcountry", "name": "eMAXIS Slim 全世界株式(オール・カントリー)", "broker": "楽天証券", "account": "積立NISA", "category": "投資信託", "region": "全世界", "current_price": 0.0, "profit": 0.0, "investment_date": ""},
+            {"code": "楽天VTI", "name": "楽天・全米株式インデックス・ファンド", "broker": "楽天証券", "account": "積立NISA", "category": "投資信託", "region": "米国", "current_price": 0.0, "profit": 0.0, "investment_date": ""},
         ]
         
         self.methods = [
@@ -134,7 +134,9 @@ class BrandMaster:
         return result
     
     def add_brand(self, code: str, name: str, broker: str = "", account: str = "特定", 
-                  category: str = "その他", region: str = "その他") -> bool:
+                  category: str = "その他", region: str = "その他", 
+                  current_price: float = 0.0, profit: float = 0.0, 
+                  investment_date: str = "") -> bool:
         """
         銘柄の追加
         
@@ -145,6 +147,9 @@ class BrandMaster:
             account: 口座種別（積立NISA/特定/NISA）
             category: カテゴリ
             region: 地域
+            current_price: 現在価格（評価額）
+            profit: 利益額
+            investment_date: 投資開始日（YYYY-MM-DD形式）
         
         Returns:
             成功時True、失敗時False
@@ -154,6 +159,11 @@ class BrandMaster:
             print(f"銘柄コード '{code}' は既に登録されています")
             return False
         
+        # 元本、利率、年利を計算
+        principal = current_price - profit
+        profit_rate = (profit / principal * 100) if principal > 0 else 0.0
+        annual_return = self._calculate_annual_return(profit, principal, investment_date)
+        
         brand = {
             'code': code,
             'name': name,
@@ -161,15 +171,62 @@ class BrandMaster:
             'account': account,
             'category': category,
             'region': region,
+            'current_price': current_price,
+            'profit': profit,
+            'investment_date': investment_date,
+            'principal': principal,
+            'profit_rate': profit_rate,
+            'annual_return': annual_return,
             'created_at': datetime.now().isoformat()
         }
         
         self.brands.append(brand)
         return self._save_master()
     
+    def _calculate_annual_return(self, profit: float, principal: float, investment_date: str) -> float:
+        """
+        年利を計算
+        
+        Args:
+            profit: 利益額
+            principal: 元本
+            investment_date: 投資開始日（YYYY-MM-DD形式）
+        
+        Returns:
+            年利（%）
+        """
+        if principal <= 0:
+            return 0.0
+        
+        if not investment_date:
+            return 0.0
+        
+        try:
+            from datetime import datetime
+            start_date = datetime.fromisoformat(investment_date)
+            today = datetime.now()
+            days = (today - start_date).days
+            
+            if days <= 0:
+                return 0.0
+            
+            years = days / 365.25
+            profit_rate = profit / principal
+            
+            # 年利 = (1 + 利益率)^(1/年数) - 1
+            if profit_rate > -1:  # 元本割れでも計算可能
+                annual_return = (pow(1 + profit_rate, 1 / years) - 1) * 100
+            else:
+                annual_return = 0.0
+            
+            return annual_return
+        except:
+            return 0.0
+    
     def update_brand(self, code: str, name: Optional[str] = None, broker: Optional[str] = None,
                      account: Optional[str] = None, category: Optional[str] = None, 
-                     region: Optional[str] = None) -> bool:
+                     region: Optional[str] = None, current_price: Optional[float] = None,
+                     profit: Optional[float] = None, investment_date: Optional[str] = None) -> bool:
         """
         銘柄情報の更新
         
@@ -180,6 +237,9 @@ class BrandMaster:
             account: 新しい口座種別（Noneの場合は変更なし）
             category: 新しいカテゴリ（Noneの場合は変更なし）
             region: 新しい地域（Noneの場合は変更なし）
+            current_price: 新しい現在価格（Noneの場合は変更なし）
+            profit: 新しい利益額（Noneの場合は変更なし）
+            investment_date: 新しい投資開始日（Noneの場合は変更なし）
         
         Returns:
             成功時True、失敗時False
@@ -196,7 +256,27 @@ class BrandMaster:
                     brand['category'] = category
                 if region is not None:
                     brand['region'] = region
+                if current_price is not None:
+                    brand['current_price'] = current_price
+                if profit is not None:
+                    brand['profit'] = profit
+                if investment_date is not None:
+                    brand['investment_date'] = investment_date
+                
+                # 元本、利率、年利を再計算
+                current = brand.get('current_price', 0.0)
+                prof = brand.get('profit', 0.0)
+                inv_date = brand.get('investment_date', '')
+                
+                principal = current - prof
+                profit_rate = (prof / principal * 100) if principal > 0 else 0.0
+                annual_return = self._calculate_annual_return(prof, principal, inv_date)
+                
+                brand['principal'] = principal
+                brand['profit_rate'] = profit_rate
+                brand['annual_return'] = annual_return
                 brand['updated_at'] = datetime.now().isoformat()
+                
                 return self._save_master()
         
         print(f"銘柄コード '{code}' が見つかりません")

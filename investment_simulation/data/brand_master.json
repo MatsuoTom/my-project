@@ -8,7 +8,9 @@
       "created_at": "2025-10-25T13:51:56.037281",
       "broker": "野村証券_朋幸",
       "account": "特定",
-      "updated_at": "2025-10-25T14:40:19.357761"
+      "updated_at": "2025-10-25T15:16:59.267737",
+      "current_price": 1447488.0,
+      "principal": 888000.0
     },
     {
       "code": "TOYOTA",
@@ -16,9 +18,11 @@
       "category": "個別株",
       "region": "日本",
       "created_at": "2025-10-25T13:51:56.037281",
-      "updated_at": "2025-10-25T14:56:26.285255",
+      "updated_at": "2025-10-25T15:30:05.102995",
       "broker": "野村証券_朋幸",
-      "account": NaN
+      "account": NaN,
+      "current_price": 1213426.0,
+      "principal": 650795.0
     },
     {
       "code": "QLD",
@@ -28,7 +32,9 @@
       "category": "ETF",
       "region": "米国",
       "created_at": "2025-10-25T14:38:30.169043",
-      "updated_at": "2025-10-25T14:40:19.360761"
+      "updated_at": "2025-10-25T15:16:59.270733",
+      "current_price": 86229.0,
+      "principal": 77424.0
     },
     {
       "code": "emaxis-slim-sp500_Chika",
@@ -38,16 +44,9 @@
       "category": "投資信託",
       "region": "米国",
       "created_at": "2025-10-25T14:42:16.262077",
-      "updated_at": "2025-10-25T14:52:23.827967"
-    },
-    {
-      "code": "emaxis-slim-sp500_Tomo",
-      "name": "eMAXIS Slim 米国株式(S&P500)",
-      "broker": "楽天証券_朋幸",
-      "account": "積立NISA",
-      "category": "投資信託",
-      "region": "米国",
-      "created_at": "2025-10-25T14:49:04.095224"
+      "updated_at": "2025-10-25T15:18:18.848656",
+      "current_price": 6290329.0,
+      "principal": 4283325.0
     },
     {
       "code": "emaxis-slim-allcountry_Chika",
@@ -56,7 +55,10 @@
       "account": "積立NISA",
       "category": "投資信託",
       "region": "米国",
-      "created_at": "2025-10-25T14:49:41.520807"
+      "created_at": "2025-10-25T14:49:41.520807",
+      "current_price": 155529.0,
+      "principal": 66666.0,
+      "updated_at": "2025-10-25T15:18:18.854812"
     },
     {
       "code": "emaxis-slim-sp500_Chika_iDeco",
@@ -65,7 +67,10 @@
       "account": "積立NISA",
       "category": "投資信託",
       "region": "米国",
-      "created_at": "2025-10-25T14:50:35.237153"
+      "created_at": "2025-10-25T14:50:35.237153",
+      "current_price": 838136.0,
+      "principal": 743347.0,
+      "updated_at": "2025-10-25T15:18:18.855678"
     },
     {
       "code": "FANG+_Chika",
@@ -74,7 +79,10 @@
       "account": "NISA",
       "category": "投資信託",
       "region": "米国",
-      "created_at": "2025-10-25T14:52:43.668463"
+      "created_at": "2025-10-25T14:52:43.668463",
+      "current_price": 4389090.0,
+      "principal": 3550000.0,
+      "updated_at": "2025-10-25T15:18:18.857656"
     },
     {
       "code": "emaxis-slim-sp500_Tomo_sbi",
@@ -83,7 +91,10 @@
       "account": "NISA",
       "category": "投資信託",
       "region": "米国",
-      "created_at": "2025-10-25T14:56:56.872450"
+      "created_at": "2025-10-25T14:56:56.872450",
+      "current_price": 3031178.0,
+      "principal": 2300000.0,
+      "updated_at": "2025-10-25T15:20:45.790257"
     },
     {
       "code": "emaxis-slim-sp500_Tomo_Rakuten",
@@ -92,7 +103,10 @@
       "account": "積立NISA",
       "category": "投資信託",
       "region": "米国",
-      "created_at": "2025-10-25T14:57:17.658691"
+      "created_at": "2025-10-25T14:57:17.658691",
+      "current_price": 2028979.0,
+      "principal": 1000405.0,
+      "updated_at": "2025-10-25T15:20:45.791258"
     },
     {
       "code": "FANG+_Tomo",
@@ -101,7 +115,10 @@
       "account": "NISA",
       "category": "投資信託",
       "region": "米国",
-      "created_at": "2025-10-25T14:57:59.378126"
+      "created_at": "2025-10-25T14:57:59.378126",
+      "current_price": 5069127.0,
+      "principal": 3890000.0,
+      "updated_at": "2025-10-25T15:30:05.105997"
     },
     {
       "code": "FANG+_Yoshi",
@@ -110,7 +127,10 @@
       "account": "NISA",
       "category": "投資信託",
       "region": "米国",
-      "created_at": "2025-10-25T14:58:12.408047"
+      "created_at": "2025-10-25T14:58:12.408047",
+      "current_price": 3780843.0,
+      "principal": 2900000.0,
+      "updated_at": "2025-10-25T15:23:33.840918"
     },
     {
       "code": "Lever-NAS",
@@ -119,7 +139,10 @@
       "account": "特定",
       "category": "投資信託",
       "region": "米国",
-      "created_at": "2025-10-25T14:59:46.708986"
+      "created_at": "2025-10-25T14:59:46.708986",
+      "current_price": 134709.0,
+      "principal": 120000.0,
+      "updated_at": "2025-10-25T15:23:51.612436"
     },
     {
       "code": "FANG+_Tomo_spc",
@@ -128,7 +151,21 @@
       "account": "特定",
       "category": "投資信託",
       "region": "米国",
-      "created_at": "2025-10-25T15:00:41.891524"
+      "created_at": "2025-10-25T15:00:41.891524",
+      "current_price": 205454.0,
+      "principal": 200000.0,
+      "updated_at": "2025-10-25T15:19:57.362463"
+    },
+    {
+      "code": "emaxis-slim-allcountry_Tomo",
+      "name": "eMAXIS Slim 全世界株式(オール・カントリー)",
+      "broker": "楽天証券_朋幸",
+      "account": "特定",
+      "category": "投資信託",
+      "region": "米国",
+      "current_price": 1447269.0,
+      "principal": 599590.0,
+      "created_at": "2025-10-25T15:22:26.430710"
     }
   ],
   "methods": [
@@ -147,5 +184,5 @@
     "楽天証券_佳子",
     "野村証券"
   ],
-  "last_updated": "2025-10-25T15:01:52.003275"
+  "last_updated": "2025-10-25T15:30:05.105997"
 }

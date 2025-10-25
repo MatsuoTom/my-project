@@ -161,71 +161,20 @@ def show_brand_master_management():
     
     # ========== 銘柄マスタ ==========
     with sub_tab1:
-        st.subheader("🏷️ 銘柄マスタ")
+        st.subheader("🏷️ 銘柄管理（表形式入力）")
         
-        # 新規銘柄登録
-        with st.expander("➕ 新規銘柄登録", expanded=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                new_code = st.text_input("銘柄コード*", key="new_brand_code", 
-                                        help="ティッカーシンボル、ファンドコード等")
-            with col2:
-                new_name = st.text_input("銘柄名*", key="new_brand_name")
-            
-            col3, col4, col5, col6 = st.columns(4)
-            with col3:
-                broker_options = master.get_brokers()
-                new_broker = st.selectbox("証券会社", [""] + broker_options, key="new_brand_broker")
-            with col4:
-                account_options = ["積立NISA", "特定", "NISA"]
-                new_account = st.selectbox("口座", account_options, key="new_brand_account", index=1)
-            with col5:
-                categories = ["ETF", "投資信託", "個別株", "債券", "その他"]
-                new_category = st.selectbox("カテゴリ", categories, key="new_brand_category")
-            with col6:
-                regions = ["米国", "日本", "全世界", "先進国", "新興国", "その他"]
-                new_region = st.selectbox("地域", regions, key="new_brand_region")
-            
-            if st.button("銘柄を追加", use_container_width=True, type="primary"):
-                if new_code and new_name:
-                    if master.add_brand(new_code, new_name, new_broker, new_account, new_category, new_region):
-                        st.success(f"✅ 銘柄 '{new_code}' を追加しました")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ 銘柄コード '{new_code}' は既に登録されています")
-                else:
-                    st.warning("銘柄コードと銘柄名は必須です")
-        
-        # 既存銘柄一覧
-        st.markdown("---")
-        st.subheader("📋 登録済み銘柄")
-        
-        # フィルタ
-        col1, col2 = st.columns(2)
-        with col1:
-            filter_category = st.selectbox(
-                "カテゴリで絞込",
-                ["全て"] + master.get_categories(),
-                key="filter_category"
-            )
-        with col2:
-            filter_region = st.selectbox(
-                "地域で絞込",
-                ["全て"] + master.get_regions(),
-                key="filter_region"
-            )
+        st.info("💡 表を直接編集して銘柄情報を入力・更新してください。現在価格と利益額を入力すると、元本・利率・年利が自動計算されます。")
         
         # 銘柄リスト取得
-        brands = master.get_brands(
-            category=None if filter_category == "全て" else filter_category,
-            region=None if filter_region == "全て" else filter_region
-        )
+        brands = master.get_brands()
         
         if brands:
             # DataFrameで表示
             df_brands = pd.DataFrame(brands)
             # 必要なカラムのみ選択（存在確認）
-            display_cols = ['code', 'name', 'broker', 'account', 'category', 'region']
+            display_cols = ['code', 'name', 'broker', 'account', 'category', 'region', 
+                          'current_price', 'profit', 'investment_date', 
+                          'principal', 'profit_rate', 'annual_return']
             available_cols = [col for col in display_cols if col in df_brands.columns]
             df_brands = df_brands[available_cols]
             
@@ -236,7 +185,13 @@ def show_brand_master_management():
                 'broker': '証券会社',
                 'account': '口座',
                 'category': 'カテゴリ',
-                'region': '地域'
+                'region': '地域',
+                'current_price': '現在価格',
+                'profit': '利益額',
+                'investment_date': '投資開始日',
+                'principal': '元本',
+                'profit_rate': '利率(%)',
+                'annual_return': '年利(%)'
             }
             df_brands.columns = [col_mapping.get(col, col) for col in df_brands.columns]
             
@@ -246,11 +201,11 @@ def show_brand_master_management():
                 num_rows="fixed",
                 column_config={
                     "コード": st.column_config.TextColumn("コード", width="small", disabled=True),
-                    "銘柄名": st.column_config.TextColumn("銘柄名", width="large"),
+                    "銘柄名": st.column_config.TextColumn("銘柄名", width="medium"),
                     "証券会社": st.column_config.SelectboxColumn(
                         "証券会社",
                         options=[""] + master.get_brokers(),
-                        width="medium"
+                        width="small"
                     ),
                     "口座": st.column_config.SelectboxColumn(
                         "口座",
@@ -266,6 +221,46 @@ def show_brand_master_management():
                         "地域",
                         options=["米国", "日本", "全世界", "先進国", "新興国", "その他"],
                         width="small"
+                    ),
+                    "現在価格": st.column_config.NumberColumn(
+                        "現在価格",
+                        help="現在の評価額（円）",
+                        min_value=0.0,
+                        format="¥%.0f",
+                        width="small"
+                    ),
+                    "利益額": st.column_config.NumberColumn(
+                        "利益額",
+                        help="利益額（円）",
+                        format="¥%.0f",
+                        width="small"
+                    ),
+                    "投資開始日": st.column_config.DateColumn(
+                        "投資開始日",
+                        help="YYYY-MM-DD形式",
+                        format="YYYY-MM-DD",
+                        width="small"
+                    ),
+                    "元本": st.column_config.NumberColumn(
+                        "元本",
+                        help="自動計算（現在価格 - 利益額）",
+                        format="¥%.0f",
+                        width="small",
+                        disabled=True
+                    ),
+                    "利率(%)": st.column_config.NumberColumn(
+                        "利率(%)",
+                        help="自動計算（利益額 / 元本 × 100）",
+                        format="%.2f%%",
+                        width="small",
+                        disabled=True
+                    ),
+                    "年利(%)": st.column_config.NumberColumn(
+                        "年利(%)",
+                        help="自動計算（年平均利回り）",
+                        format="%.2f%%",
+                        width="small",
+                        disabled=True
                     )
                 },
                 hide_index=True,
@@ -293,14 +288,34 @@ def show_brand_master_management():
                                 changes['category'] = row['カテゴリ']
                             if '地域' in row and row['地域'] != original.get('region'):
                                 changes['region'] = row['地域']
+                            if '現在価格' in row and row['現在価格'] != original.get('current_price', 0.0):
+                                changes['current_price'] = row['現在価格']
+                            if '利益額' in row and row['利益額'] != original.get('profit', 0.0):
+                                changes['profit'] = row['利益額']
+                            if '投資開始日' in row:
+                                # DateColumnはdatetimeオブジェクトを返すので文字列に変換
+                                new_date = row['投資開始日']
+                                if pd.notna(new_date):
+                                    if hasattr(new_date, 'strftime'):
+                                        new_date_str = new_date.strftime('%Y-%m-%d')
+                                    else:
+                                        new_date_str = str(new_date)
+                                    if new_date_str != original.get('investment_date', ''):
+                                        changes['investment_date'] = new_date_str
                             
                             if changes:
                                 master.update_brand(row['コード'], **changes)
-                    st.success("✅ 変更を保存しました")
+                    st.success("✅ 変更を保存しました（元本・利率・年利を自動計算）")
                     st.rerun()
             
             with col2:
-                st.info(f"登録銘柄数: {len(brands)}件")
+                # 損益情報を表示
+                total_current = sum([b.get('current_price', 0.0) for b in brands])
+                total_profit = sum([b.get('profit', 0.0) for b in brands])
+                total_principal = sum([b.get('principal', 0.0) for b in brands])
+                avg_profit_rate = (total_profit / total_principal * 100) if total_principal > 0 else 0.0
+                
+                st.info(f"📊 銘柄数: {len(brands)}件 | 元本合計: ¥{total_principal:,.0f} | 評価額: ¥{total_current:,.0f} | 利益合計: ¥{total_profit:,.0f} | 平均利率: {avg_profit_rate:+.2f}%")
         else:
             st.info("該当する銘柄がありません")
         
