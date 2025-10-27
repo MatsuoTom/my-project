@@ -91,7 +91,7 @@ def show_home_page():
         # クイック計算
         st.markdown("### 🧮 クイック計算")
         quick_premium = st.number_input(
-            "年間保険料（円）", 
+            "年間保険料（円）",
             min_value=0, 
             max_value=200000, 
             value=102000,
@@ -99,13 +99,12 @@ def show_home_page():
             key="quick_premium"
         )
         
+        # 控除額を計算
         calculator = LifeInsuranceDeductionCalculator()
         quick_deduction = calculator.calculate_old_deduction(quick_premium)
         
         # 月保険料を自動計算
-        monthly_premium = quick_premium / 12
-        
-        col_metric1, col_metric2 = st.columns(2)
+        monthly_premium = quick_premium / 12        col_metric1, col_metric2 = st.columns(2)
         with col_metric1:
             st.metric(
                 "控除額",
@@ -407,24 +406,16 @@ def show_deduction_calculator():
     with col2:
         st.subheader("📊 計算結果")
         
-        # 控除額計算
-        calculator = LifeInsuranceDeductionCalculator()
-        deduction = calculator.calculate_old_deduction(annual_premium)
+        # 税金ヘルパーで計算
+        tax_helper = get_tax_helper()
+        tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, taxable_income)
         
-        # 税額計算
-        tax_calculator = TaxCalculator()
-        income_tax_rate = tax_calculator.get_income_tax_rate(taxable_income)
-        resident_tax_rate = 0.10  # 住民税10%固定
-        
-        income_tax_savings = deduction * income_tax_rate
-        resident_tax_savings = deduction * resident_tax_rate
-        total_tax_savings = income_tax_savings + resident_tax_savings
-        
-        st.metric("控除額", f"{deduction:,.0f}円")
-        st.metric("所得税節税額", f"{income_tax_savings:,.0f}円")
-        st.metric("住民税節税額", f"{resident_tax_savings:,.0f}円")
-        st.metric("総節税額", f"{total_tax_savings:,.0f}円", 
-                 delta=f"節税率: {total_tax_savings/annual_premium:.1%}" if annual_premium > 0 else None)
+        # 結果表示
+        st.metric("控除額", f"{tax_result['deduction']:,.0f}円")
+        st.metric("所得税節税額", f"{tax_result['income_tax_savings']:,.0f}円")
+        st.metric("住民税節税額", f"{tax_result['resident_tax_savings']:,.0f}円")
+        st.metric("総節税額", f"{tax_result['total_savings']:,.0f}円", 
+                 delta=f"節税率: {tax_result['total_savings']/annual_premium:.1%}" if annual_premium > 0 else None)
 
 
 def show_withdrawal_optimizer():
@@ -502,11 +493,11 @@ def show_withdrawal_optimizer():
     if st.button("🎯 最適タイミングを分析", key="run_optimization"):
         st.success("最適化分析を実行中...")
         
-        # 年間保険料と基本計算
+        # 年間保険料と税額計算
         annual_premium_opt = monthly_premium_opt * 12
-        calculator = LifeInsuranceDeductionCalculator()
-        deduction_amount = calculator.calculate_old_deduction(annual_premium_opt)
-        tax_calculator = TaxCalculator()
+        tax_helper = get_tax_helper()
+        tax_result = tax_helper.calculate_annual_tax_savings(annual_premium_opt, taxable_income_opt)
+        deduction_amount = tax_result['deduction']
         
         # 手数料設定
         monthly_fee_rate = 0.013
@@ -769,9 +760,8 @@ def show_scenario_analysis():
     if st.button("📊 シナリオ分析を実行", key="run_scenario_analysis"):
         st.success("シナリオ分析を実行中...")
         
-        # 計算設定
-        calculator = LifeInsuranceDeductionCalculator()
-        tax_calculator = TaxCalculator()
+        # 税金ヘルパーを取得
+        tax_helper = get_tax_helper()
         
         scenarios = {
             '基本シナリオ': {
@@ -1064,17 +1054,15 @@ def show_sensitivity_analysis():
     if st.button("🎯 感度分析を実行", key="run_sensitivity_analysis"):
         st.success("感度分析を実行中...")
         
-        # 基準値の計算
+        # 基準値の設定と税金ヘルパー取得
         base_income_sens = base_income_sens_man * 10000
-        calculator = LifeInsuranceDeductionCalculator()
-        tax_calculator = TaxCalculator()
+        tax_helper = get_tax_helper()
         
         def calculate_final_benefit(monthly_premium, annual_rate, annual_income):
             """指定パラメータでの最終正味利益を計算"""
             annual_premium = monthly_premium * 12
-            deduction = calculator.calculate_old_deduction(annual_premium)
-            income_tax_rate = tax_calculator.get_income_tax_rate(annual_income)
-            annual_tax_savings = deduction * (income_tax_rate + 0.10)
+            tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, annual_income)
+            annual_tax_savings = tax_result['total_savings']
             
             monthly_fee_rate = 0.013
             monthly_balance_fee_rate = 0.00008
@@ -1506,12 +1494,10 @@ def show_report_generator():
         report_income = report_income_man * 10000
         annual_premium = report_monthly_premium * 12
         
-        calculator = LifeInsuranceDeductionCalculator()
-        tax_calculator = TaxCalculator()
-        
-        deduction = calculator.calculate_old_deduction(annual_premium)
-        income_tax_rate = tax_calculator.get_income_tax_rate(report_income)
-        annual_tax_savings = deduction * (income_tax_rate + 0.10)
+        # 税金計算
+        tax_helper = get_tax_helper()
+        tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, report_income)
+        annual_tax_savings = tax_result['total_savings']
         
         # 詳細計算
         monthly_fee_rate = 0.013
@@ -2298,16 +2284,14 @@ def show_investment_comparison():
     if st.button("⚖️ 詳細比較分析を実行", key="run_investment_comparison"):
         st.success("投資信託 vs 生命保険の比較分析を実行中...")
         
-        # 基本設定
+        # 基本設定と税金計算
         annual_income_comp = annual_income_comp_man * 10000
-        calculator = LifeInsuranceDeductionCalculator()
-        tax_calculator = TaxCalculator()
+        tax_helper = get_tax_helper()
         
-        # 生命保険の計算
+        # 生命保険の税額計算
         annual_insurance_premium = monthly_investment * 12
-        insurance_deduction = calculator.calculate_old_deduction(annual_insurance_premium)
-        income_tax_rate = tax_calculator.get_income_tax_rate(annual_income_comp)
-        annual_tax_savings = insurance_deduction * (income_tax_rate + 0.10)
+        tax_result = tax_helper.calculate_annual_tax_savings(annual_insurance_premium, annual_income_comp)
+        annual_tax_savings = tax_result['total_savings']
         
         # 投資信託の実質コスト
         total_fund_fee = annual_management_fee + hidden_cost
@@ -4140,18 +4124,15 @@ def _show_deduction_from_income():
             key="deduction_annual_premium"
         )
         
-        # 基本控除額計算
-        calculator = LifeInsuranceDeductionCalculator()
-        tax_calc = TaxCalculator()
-        
-        deduction_amount = calculator.calculate_old_deduction(annual_premium)
-        
-        # 所得税・住民税節税額計算
+        # 税金計算
+        tax_helper = get_tax_helper()
         annual_income_yen = annual_income * 10000
-        tax_savings_result = tax_calc.calculate_tax_savings(deduction_amount, annual_income_yen)
-        income_tax_savings = tax_savings_result["所得税節税額"]
-        resident_tax_savings = tax_savings_result["住民税節税額"]
-        total_tax_savings = tax_savings_result["合計節税額"]
+        tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, annual_income_yen)
+        
+        deduction_amount = tax_result['deduction']
+        income_tax_savings = tax_result['income_tax_savings']
+        resident_tax_savings = tax_result['resident_tax_savings']
+        total_tax_savings = tax_result['total_savings']
         
     with col2:
         st.subheader("💰 計算結果")
@@ -4284,7 +4265,7 @@ def _show_insurance_settings():
             st.metric("実質年利（概算）", f"{net_annual_rate:.3f}%",
                      help="表面年利 - 残高手数料率（積立額手数料は別途）")
         
-        # 控除効果を計算
+        # 控除額を計算（簡易版：控除額のみ）
         calculator = LifeInsuranceDeductionCalculator()
         deduction_amount = calculator.calculate_old_deduction(annual_premium)
         
@@ -4846,16 +4827,11 @@ def _show_insurance_comparison():
     balance_fee_impact = insurance_value * plan['balance_fee_rate'] * total_months
     insurance_value -= balance_fee_impact
     
-    # 控除による節税効果
+    # 控除による節税効果（簡易計算：500万円の年収で）
     annual_premium = monthly_premium * 12
-    calculator = LifeInsuranceDeductionCalculator()
-    tax_calc = TaxCalculator()
-    deduction_amount = calculator.calculate_old_deduction(annual_premium)
-    
-    # 仮の年収（500万円）で節税額計算
-    annual_income = 5000000
-    tax_savings_result = tax_calc.calculate_tax_savings(deduction_amount, annual_income)
-    annual_tax_savings = tax_savings_result["合計節税額"]
+    tax_helper = get_tax_helper()
+    tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, 5000000)
+    annual_tax_savings = tax_result['total_savings']
     total_tax_savings = annual_tax_savings * period
     
     insurance_total_value = insurance_value + total_tax_savings
@@ -5258,11 +5234,11 @@ def _show_no_switching_analysis(plan: dict, fund: dict):
         
         # 節税効果
         annual_premium = monthly_premium * 12
-        calculator = LifeInsuranceDeductionCalculator()
-        deduction = calculator.calculate_old_deduction(annual_premium)
-        tax_calc = TaxCalculator()
-        tax_savings_result = tax_calc.calculate_tax_savings(deduction, 5000000)
-        annual_tax_savings = tax_savings_result["合計節税額"]
+        # 節税効果
+        annual_premium = monthly_premium * 12
+        tax_helper = get_tax_helper()
+        tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, 5000000)
+        annual_tax_savings = tax_result['total_savings']
         total_tax_savings = annual_tax_savings * period
         
         insurance_total = insurance_value + total_tax_savings
@@ -5406,12 +5382,9 @@ def _calculate_switching_value(plan: dict, fund: dict, switch_year: int, total_p
     
     # 節税効果（生命保険期間分）
     annual_premium = monthly_premium * 12
-    calculator = LifeInsuranceDeductionCalculator()
-    deduction = calculator.calculate_old_deduction(annual_premium)
-    tax_calc = TaxCalculator()
-    tax_savings_result = tax_calc.calculate_tax_savings(deduction, 5000000)
-    annual_tax_savings = tax_savings_result["合計節税額"]
-    insurance_tax_savings = annual_tax_savings * switch_year
+    tax_helper = get_tax_helper()
+    tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, 5000000)
+    insurance_tax_savings = tax_result['total_savings'] * switch_year
     
     # Phase 2: 投資信託期間
     fund_period = total_period - switch_year
@@ -5855,12 +5828,9 @@ def _calculate_partial_withdrawal_value(plan: dict, fund: dict, interval: int, r
     
     # 節税効果
     annual_premium = monthly_premium * 12
-    calculator = LifeInsuranceDeductionCalculator()
-    deduction = calculator.calculate_old_deduction(annual_premium)
-    tax_calc = TaxCalculator()
-    tax_savings_result = tax_calc.calculate_tax_savings(deduction, 5000000)
-    annual_tax_savings = tax_savings_result["合計節税額"]
-    total_tax_savings = annual_tax_savings * period
+    tax_helper = get_tax_helper()
+    tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, 5000000)
+    total_tax_savings = tax_result['total_savings'] * period
     
     total_value = current_balance + reinvestment_value + total_tax_savings
     
@@ -5895,12 +5865,9 @@ def _calculate_simple_insurance_value(plan: dict) -> float:
     
     # 節税効果
     annual_premium = monthly_premium * 12
-    calculator = LifeInsuranceDeductionCalculator()
-    deduction = calculator.calculate_old_deduction(annual_premium)
-    tax_calc = TaxCalculator()
-    tax_savings_result = tax_calc.calculate_tax_savings(deduction, 5000000)
-    annual_tax_savings = tax_savings_result["合計節税額"]
-    total_tax_savings = annual_tax_savings * period
+    tax_helper = get_tax_helper()
+    tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, 5000000)
+    total_tax_savings = tax_result['total_savings'] * period
     
     return insurance_value + total_tax_savings
 
@@ -6021,12 +5988,9 @@ def _calculate_partial_withdrawal_value_enhanced(plan: dict, fund: dict, interva
     
     # 節税効果
     annual_premium = monthly_premium * 12
-    calculator = LifeInsuranceDeductionCalculator()
-    deduction = calculator.calculate_old_deduction(annual_premium)
-    tax_calc = TaxCalculator()
-    tax_savings_result = tax_calc.calculate_tax_savings(deduction, taxable_income)
-    annual_tax_savings = tax_savings_result["合計節税額"]
-    total_tax_savings = annual_tax_savings * period
+    tax_helper = get_tax_helper()
+    tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, taxable_income)
+    total_tax_savings = tax_result['total_savings'] * period
     
     # 総価値
     total_value = current_balance + reinvestment_value + total_tax_savings - withdrawal_tax
@@ -6117,14 +6081,11 @@ def _generate_optimal_strategy_recommendation(risk_tolerance: str, liquidity_nee
     }
     insurance_value -= balance_fee
     
-    # 節税効果
+    # 節税効果（関数末尾の計算）
     annual_premium = monthly_premium * 12
-    calculator = LifeInsuranceDeductionCalculator()
-    deduction = calculator.calculate_old_deduction(annual_premium)
-    tax_calc = TaxCalculator()
-    tax_savings_result = tax_calc.calculate_tax_savings(deduction, 5000000)
-    annual_tax_savings = tax_savings_result["合計節税額"]
-    total_tax_savings = annual_tax_savings * period
+    tax_helper = get_tax_helper()
+    tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, 5000000)
+    total_tax_savings = tax_result['total_savings'] * period
     
     return insurance_value + total_tax_savings
 
