@@ -6,19 +6,24 @@
 
 Phase 1で作成したtax_helperと連携して、
 保険価値計算、節税効果、手数料計算などを統一的に処理します。
+
+Phase 3: 共通基盤（common/）を利用して重複コードを削減
 """
 
 from typing import Tuple, Optional
 from life_insurance.models import InsurancePlan, FundPlan, InsuranceResult
 from life_insurance.utils.tax_helpers import get_tax_helper
 from life_insurance.core.tax_calculator import TaxCalculator
+from common.calculators.base_calculator import BaseFinancialCalculator, CompoundInterestMixin
+from common.utils.math_utils import calculate_annuity_future_value
 
 
-class InsuranceCalculator:
+class InsuranceCalculator(BaseFinancialCalculator, CompoundInterestMixin):
     """
     生命保険価値計算の統合エンジン
     
     Phase 2で実装された統合計算エンジン。
+    Phase 3で共通基盤（BaseFinancialCalculator, CompoundInterestMixin）を継承。
     保険価値計算の重複を削減し、一元化された計算ロジックを提供。
     
     Attributes:
@@ -34,54 +39,48 @@ class InsuranceCalculator:
     
     def __init__(self):
         """初期化"""
+        super().__init__()  # BaseFinancialCalculator の初期化
         self.tax_helper = get_tax_helper()
         self.tax_calculator = TaxCalculator()
+    
+    def calculate(self, *args, **kwargs):
+        """
+        BaseFinancialCalculator の抽象メソッド実装
+        
+        保険計算は複数のメソッドに分かれているため、
+        このメソッドは calculate_simple_value を呼び出します。
+        """
+        return self.calculate_simple_value(*args, **kwargs)
+    
+    def validate_inputs(self, plan: InsurancePlan) -> bool:
+        """
+        入力値の検証
+        
+        Args:
+            plan: 保険プラン
+            
+        Returns:
+            bool: 検証結果
+            
+        Raises:
+            ValueError: 不正な入力値の場合
+        """
+        if plan.monthly_premium <= 0:
+            raise ValueError("月額保険料は正の値である必要があります")
+        if plan.investment_period <= 0:
+            raise ValueError("運用期間は正の値である必要があります")
+        if plan.annual_rate < 0:
+            raise ValueError("年率は0以上である必要があります")
+        if plan.fee_rate < 0 or plan.fee_rate >= 1:
+            raise ValueError("手数料率は0以上1未満である必要があります")
+        
+        return True
     
     # ==========================================
     # ヘルパーメソッド（内部使用）
     # ==========================================
     
-    def _calculate_compound_interest(
-        self,
-        monthly_payment: float,
-        monthly_rate: float,
-        total_months: int
-    ) -> float:
-        """
-        複利積立の年金終価計算
-        
-        月次積立の複利計算を年金終価公式で計算します。
-        数学公式: FV = PMT × [(1 + r)^n - 1] / r
-        
-        Args:
-            monthly_payment: 月次積立額（手数料控除後、円）
-            monthly_rate: 月次運用利回り（小数表記、例: 0.00166 = 0.166%）
-            total_months: 総月数
-            
-        Returns:
-            年金終価（円）
-            
-        Examples:
-            >>> calc = InsuranceCalculator()
-            >>> # 月3万円、年利2%、20年間
-            >>> monthly_payment = 30000 * (1 - 0.013)  # 手数料控除後
-            >>> monthly_rate = 0.02 / 12
-            >>> total_months = 20 * 12
-            >>> fv = calc._calculate_compound_interest(monthly_payment, monthly_rate, total_months)
-            >>> print(f"年金終価: {fv:,.0f}円")
-            年金終価: 8,854,321円
-            
-        Notes:
-            - monthly_rate = 0 の場合は単純な積立合計を返す
-            - 月次複利計算のため、年利を12で割る必要がある
-            - 手数料は事前に控除されている前提
-        """
-        if monthly_rate > 0:
-            # 年金終価公式: FV = PMT × [(1 + r)^n - 1] / r
-            return monthly_payment * ((1 + monthly_rate) ** total_months - 1) / monthly_rate
-        else:
-            # 利回りゼロの場合は単純な積立合計
-            return monthly_payment * total_months
+    # _calculate_compound_interest は削除（common.utils.math_utils.calculate_annuity_future_value を使用）
     
     def _calculate_fees(
         self,
@@ -297,11 +296,11 @@ class InsuranceCalculator:
         # 1. 手数料控除後の月次積立額
         net_monthly_premium = plan.monthly_premium * (1 - plan.fee_rate)
         
-        # 2. 複利積立計算（手数料控除後）
-        gross_value = self._calculate_compound_interest(
-            net_monthly_premium,
-            monthly_rate,
-            total_months
+        # 2. 複利積立計算（手数料控除後）- 共通基盤を使用
+        gross_value = calculate_annuity_future_value(
+            payment=net_monthly_premium,
+            rate=monthly_rate,
+            periods=total_months
         )
         
         # 3. 残高手数料の計算

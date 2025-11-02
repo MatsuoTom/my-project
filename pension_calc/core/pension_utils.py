@@ -2,6 +2,8 @@
 年金計算ユーティリティ
 
 年金データの管理と計算を行うメインモジュール
+
+Phase 3: 共通基盤（common/）との統合準備
 """
 
 import pandas as pd
@@ -9,6 +11,8 @@ import numpy as np
 from datetime import datetime, date
 from typing import List, Dict, Tuple, Optional
 import os
+from common.calculators.base_calculator import BaseFinancialCalculator
+from common.utils.date_utils import calculate_age
 
 # サンプルデータ（実際のプロジェクトでは外部データを使用）
 SAMPLE_PENSION_RECORDS = [
@@ -141,8 +145,13 @@ def save_df(new_df: pd.DataFrame) -> None:
     records.clear()
     records.extend(df_norm.astype(object).where(pd.notna(df_norm), None).to_dict(orient="records"))
 
-class PensionCalculator:
-    """年金計算メインクラス"""
+class PensionCalculator(BaseFinancialCalculator):
+    """
+    年金計算メインクラス
+    
+    Phase 3で共通基盤（BaseFinancialCalculator）を継承。
+    将来的な拡張（複利計算、現在価値計算等）に対応可能。
+    """
     
     def __init__(self, records: List[Dict] = None):
         """
@@ -151,6 +160,8 @@ class PensionCalculator:
         Args:
             records: 年金記録データのリスト
         """
+        super().__init__()  # BaseFinancialCalculatorの初期化
+        
         # 呼び出し元から明示的に渡されればそれを使用、なければ現在の df を利用
         if records is None:
             # 現在のグローバル df を使用（CSV読み込み後の最新状態）
@@ -159,6 +170,41 @@ class PensionCalculator:
         else:
             self.records = records
             self.df = pd.DataFrame(self.records)
+    
+    def calculate(self, retirement_age: int = 65) -> Dict:
+        """
+        BaseFinancialCalculatorの抽象メソッド実装
+        
+        将来の年金受給額を計算します。
+        
+        Args:
+            retirement_age: 退職年齢
+            
+        Returns:
+            計算結果の辞書
+        """
+        return self.calculate_future_pension(retirement_age)
+    
+    def validate_inputs(self, retirement_age: int = 65) -> bool:
+        """
+        入力値の検証
+        
+        Args:
+            retirement_age: 退職年齢
+            
+        Returns:
+            bool: 検証結果
+            
+        Raises:
+            ValueError: 不正な入力値の場合
+        """
+        if retirement_age < 60 or retirement_age > 75:
+            raise ValueError("退職年齢は60歳から75歳の範囲である必要があります")
+        
+        if self.df is None or len(self.df) == 0:
+            raise ValueError("年金記録データが空です")
+        
+        return True
     
     def calculate_future_pension(self, retirement_age: int = 65) -> Dict:
         """

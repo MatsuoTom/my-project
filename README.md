@@ -1,352 +1,280 @@
-# 金融分析ツール統合プロジェクト# 金融分析ツール統合プロジェクト
+# 金融分析ツール統合プロジェクト
 
+このプロジェクトは、生命保険分析・年金シミュレーション・投資シミュレーションを統合した金融分析ツールです。Phase 3-4のリファクタリングにより、共通基盤を構築し、高品質なテスト環境を整備しました。
 
+## � プロジェクトの特徴
 
-このプロジェクトは生命保険分析と年金シミュレーションの2つの金融分析ツールを統合したものです。特に年金シミュレーターは高度な損益分岐・最適化分析機能を搭載し、データ編集・永続化機能も完備しています。このプロジェクトは生命保険分析と年金シミュレーションの2つの金融分析ツールを統合したものです。
+### 🎯 統合された3つのツール
 
+1. **生命保険分析ツール**: 旧生命保険料控除の節税効果分析
+2. **年金シミュレーター**: 国民年金・厚生年金の受給額試算
+3. **投資シミュレーター**: NISA・投資信託の分析（開発中）
 
+### ✅ 高品質な開発基盤（Phase 3-4完了）
 
-## 🚀 新機能ハイライト## 🏗️ プロジェクト構造
+- **283件のテスト**: 100%パス（2.13秒で実行）
+- **共通基盤**: 重複コードを削減し、保守性を向上
+- **テスト駆動開発**: TDD原則に基づく堅牢な設計
+- **継続的な品質管理**: レガシーコード対応完了
 
+## 🏗️ プロジェクト構造
 
-
-- **📊 高度な損益分岐・最適化分析**: キャリアモデル連携による詳細計算```
-
-- **🎯 キャリアモデル選択**: デフォルト・拡張モデルを選択可能my-project/
-
-- **💾 データ編集・永続化**: CSV保存・読込・Excel取込・リアルタイム編集├── life_insurance/              # 生命保険分析プロジェクト
-
-- **📈 インタラクティブなタブUI**: 一覧性の高いタブベース設計│   ├── core/                    # コア計算機能
-
-- **🔧 統合ランチャー**: 両アプリを統一的に起動│   │   ├── tax_calculator.py    # 税額計算
-
+```
+my-project/
+├── common/                      # 共通基盤（Phase 3で作成）
+│   ├── base_calculator.py       # 基底計算機クラス
+│   ├── date_utils.py            # 日付・年齢・和暦ユーティリティ
+│   ├── math_utils.py            # 金融計算ユーティリティ
+│   ├── financial_plan.py        # FinancialPlanモデル
+│   └── tests/                   # 共通基盤のテスト（163件）
+│
+├── life_insurance/              # 生命保険分析
+│   ├── core/                    # コア計算機能
+│   │   ├── tax_calculator.py    # 税額計算
 │   │   └── deduction_calculator.py # 控除計算
-
-## 🏗️ プロジェクト構造│   ├── analysis/                # 分析ロジック
-
+│   ├── analysis/                # 分析ロジック
 │   │   ├── scenario_analyzer.py # シナリオ分析
-
-```│   │   └── withdrawal_optimizer.py # 引き出し最適化
-
-my-project/│   ├── ui/                      # ユーザーインターフェース
-
-├── .github/                     # プロジェクト設定・指示書│   │   ├── streamlit_app.py     # メインアプリ
-
-├── life_insurance/              # 生命保険分析プロジェクト│   │   └── comparison_app.py    # 比較分析
-
-│   ├── core/                    # コア計算機能│   └── tests/                   # テスト
-
-│   │   ├── tax_calculator.py    # 税額計算├── pension_calc/                # 年金シミュレーションプロジェクト
-
-│   │   └── deduction_calculator.py # 控除計算│   ├── core/                    # コア計算機能
-
-│   ├── analysis/                # 分析ロジック│   │   └── pension_utils.py     # 年金計算ユーティリティ
-
-│   │   ├── scenario_analyzer.py # シナリオ分析│   ├── analysis/                # 分析ロジック
-
-│   │   └── withdrawal_optimizer.py # 引き出し最適化│   │   └── national_pension.py  # 国民年金分析
-
-│   ├── ui/                      # ユーザーインターフェース│   ├── ui/                      # ユーザーインターフェース
-
-│   │   ├── streamlit_app.py     # メインアプリ│   │   └── streamlit_app.py     # 年金分析アプリ
-
-│   │   └── comparison_app.py    # 比較分析│   └── data/                    # データファイル
-
-│   └── tests/                   # テスト├── tests/                       # 統合テスト
-
-├── pension_calc/                # 年金シミュレーションプロジェクト（高度版）├── main.py                      # 統合ランチャー
-
-│   ├── core/                    # コア計算機能├── pyproject.toml              # 依存関係管理
-
-│   │   └── pension_utils.py     # 年金計算・データ永続化・キャリアモデル└── README.md                   # このファイル
-
-│   ├── analysis/                # 分析ロジック```
-
+│   │   ├── withdrawal_optimizer.py # 引き出し最適化
+│   │   └── insurance_calculator.py # 保険計算機
+│   ├── ui/                      # Streamlitアプリ
+│   │   ├── streamlit_app.py     # メインアプリ
+│   │   └── comparison_app.py    # 比較分析
+│   ├── models.py                # データモデル
+│   └── tests/                   # テスト（107件）
+│
+├── pension_calc/                # 年金シミュレーション
+│   ├── core/                    # コア計算機能
+│   │   └── pension_utils.py     # 年金計算ユーティリティ
+│   ├── analysis/                # 分析ロジック
 │   │   └── national_pension.py  # 国民年金分析
-
-│   ├── ui/                      # ユーザーインターフェース## 🚀 クイックスタート
-
-│   │   └── streamlit_app.py     # 年金分析アプリ（タブベース・高機能版）
-
-│   └── data/                    # データファイル・CSV保存先### 統合ランチャーを使用（推奨）
-
-├── scripts/                     # 起動スクリプト
-
-│   ├── run_life_insurance_app.py # 生命保険アプリ起動```bash
-
-│   └── run_pension_app.py       # 年金アプリ起動（ポート自動調整）python main.py
-
-├── tests/                       # 統合テスト```
-
+│   ├── ui/                      # Streamlitアプリ
+│   │   └── streamlit_app.py     # 年金分析アプリ
+│   └── data/                    # データファイル
+│
+├── investment_simulation/       # 投資シミュレーション（開発中）
+│   ├── core/                    # コア機能
+│   ├── ui/                      # Streamlitアプリ
+│   └── data/                    # データファイル
+│
+├── tests/                       # 統合テスト（13件）
+│   └── test_pension_calculator_integration.py
+│
+├── REFACTORING/                 # リファクタリングドキュメント
+│   ├── PHASE_3/                 # Phase 3: 共通基盤構築
+│   └── PHASE_4/                 # Phase 4: レガシーテスト対応
+│
 ├── main.py                      # 統合ランチャー
-
-├── pyproject.toml              # 依存関係管理メニューからプロジェクトを選択して起動できます。
-
-├── FEATURE_COMPARISON.md       # 機能比較ドキュメント
-
-└── README.md                   # このファイル### 個別起動
-
+├── pyproject.toml               # 依存関係管理
+└── README.md                    # このファイル
 ```
 
-#### 生命保険分析ツール
+## 🚀 クイックスタート
 
-## 🚀 クイックスタート```bash
+### 統合ランチャーを使用（推奨）
 
-python scripts/run_life_insurance_app.py
-
-### 統合ランチャーを使用（推奨）# または
-
-streamlit run life_insurance/ui/streamlit_app.py --server.port=8507
-
-```bash```
-
+```bash
 python main.py
-
-```#### 年金シミュレーションツール
-
-```bash
-
-メニューからプロジェクトを選択して起動できます。python scripts/run_pension_app.py
-
-# または
-
-### 個別起動streamlit run pension_calc/ui/streamlit_app.py --server.port=8508
-
 ```
+
+対話型メニューから使いたいツールを選択できます。
+
+### 個別起動
 
 #### 生命保険分析ツール
 
-```bash## 📊 機能概要
+```bash
+python run_life_insurance_app.py
+# または
+streamlit run life_insurance/ui/streamlit_app.py --server.port=8501
+```
 
-python scripts/run_life_insurance_app.py
-
-# または### 生命保険分析ツール
-
-streamlit run life_insurance/ui/streamlit_app.py --server.port=8507- **生命保険料控除分析**: 各種控除額の計算と最適化
-
-```- **投資信託比較**: 生命保険と投資信託の収益性比較
-
-- **引き出しタイミング最適化**: 部分解約戦略の自動提案
-
-#### 年金シミュレーションツール（高度版）- **詳細シミュレーション**: 手数料、税金を考慮した実損益計算
+#### 年金シミュレーションツール
 
 ```bash
+python run_pension_app.py
+# または
+streamlit run pension_calc/ui/streamlit_app.py --server.port=8502
+```
 
-python scripts/run_pension_app.py### 年金シミュレーションツール
+#### 投資シミュレーションツール（開発中）
 
-# または- **年金試算**: 将来の年金受給額計算
+```bash
+# 実装予定
+```
 
-streamlit run pension_calc/ui/streamlit_app.py --server.port=8508- **納付実績分析**: 過去の納付状況の可視化
-
-```- **損益分析**: 納付額と受給額の比較
-
-- **将来予測**: ライフプラン別の年金シミュレーション
-
-## 📊 機能概要
-
-## 🛠️ 開発環境セットアップ
+## 📊 主な機能
 
 ### 生命保険分析ツール
 
-- **生命保険料控除分析**: 各種控除額の計算と最適化### 必要な環境
+- **生命保険料控除分析**: 旧生命保険料控除制度の節税効果計算
+- **投資信託比較**: 生命保険と投資信託の収益性比較
+- **引き出しタイミング最適化**: 部分解約戦略の自動提案
+- **詳細シミュレーション**: 手数料・税金を考慮した実損益計算
+- **シナリオ分析**: 複数条件下での比較検討
+- **リスク分析**: モンテカルロシミュレーション
 
-- **投資信託比較**: 生命保険と投資信託の収益性比較- Python 3.12以上
+### 年金シミュレーションツール
 
-- **引き出しタイミング最適化**: 部分解約戦略の自動提案- 推奨IDE: VS Code
+- **年金試算**: 国民年金・厚生年金の受給額計算
+- **納付実績分析**: 過去の納付状況の可視化
+- **損益分析**: 納付額と受給額の比較
+- **将来予測**: キャリアモデル別の年金シミュレーション
+- **最適化分析**: 最適な受給開始年齢の算出
+- **データ永続化**: CSV形式での実績データ管理
 
-- **詳細シミュレーション**: 手数料、税金を考慮した実損益計算
+### 投資シミュレーションツール（開発中）
 
-### 依存パッケージのインストール
-
-### 年金シミュレーションツール（高度版）
-
-```bash
-
-#### コア機能# 基本パッケージ
-
-- **🏠 ホーム**: 基本情報とキャリアモデル説明pip install streamlit pandas plotly numpy matplotlib seaborn
-
-- **💰 支払実績**: インタラクティブなデータ編集・CSV保存・Excel取込
-
-- **🎯 受給額試算**: 繰上げ・繰下げ受給を考慮した詳細試算# 追加パッケージ
-
-- **🔮 将来予測**: 年収推移・保険料予測の可視化pip install openpyxl yfinance
-
-- **📊 損益分岐・最適化**: 高度な分析機能（詳細版）
-
-- **📋 計算方法**: 詳細な計算ロジックの説明# または pyproject.toml から一括インストール
-
-pip install -r requirements.txt
-
-#### 高度機能```
-
-- **キャリアモデル選択**: 
-
-  - `default`: 標準的な企業キャリア（30-60歳、8段階）### 仮想環境の使用（推奨）
-
-  - `expanded`: 詳細なキャリアパス（25-60歳、11段階）
-
-- **損益分岐・最適化分析**: ```bash
-
-  - キャリアモデル連携による詳細納付額計算# 仮想環境作成
-
-  - 厚生年金料率18.3%を考慮python -m venv venv
-
-  - 最適受給開始年齢の自動算出
-
-  - 投資回収率・生涯総受給額の比較# 仮想環境の有効化
-
-- **データ永続化**: # Windows PowerShell
-
-  - CSV形式での保存・読込.\venv\Scripts\Activate.ps1
-
-  - Excel（.xlsx/.xls）ファイルの取込
-
-  - リアルタイム編集機能# 依存関係インストール
-
-  - データダウンロードpip install streamlit pandas plotly numpy matplotlib seaborn openpyxl yfinance
-
-```
+- NISA投資シミュレーション
+- 銘柄マスタ管理
+- 月次投資データ入力
+- 投資分析（実装予定）
 
 ## 🛠️ 開発環境セットアップ
 
-## 💡 使用方法
-
 ### 必要な環境
 
-- Python 3.12以上### 1. 統合ランチャーから起動
+- **Python**: 3.12以上
+- **推奨IDE**: VS Code
+- **OS**: Windows / macOS / Linux
 
-- 推奨IDE: VS Code
+### 依存パッケージのインストール
 
 ```bash
+# 基本パッケージ
+pip install streamlit pandas plotly numpy matplotlib seaborn
 
-### 依存パッケージのインストールpython main.py
+# 追加パッケージ
+pip install openpyxl yfinance
 
+# または pyproject.toml から一括インストール
+pip install -e .
 ```
 
+### 仮想環境の使用（推奨）
+
 ```bash
+# 仮想環境作成
+python -m venv .venv
 
-# 基本パッケージ対話型メニューから使いたいツールを選択します。
+# 仮想環境の有効化
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+# macOS/Linux
+source .venv/bin/activate
 
-pip install streamlit pandas plotly numpy matplotlib seaborn
+# 依存関係インストール
+pip install streamlit pandas plotly numpy matplotlib seaborn openpyxl yfinance
+```
+
+## 🧪 テスト実行
+
+### 全体テスト（推奨）
+
+```bash
+# 全テスト実行（283件、2.13秒）
+pytest common/tests/ tests/test_pension_calculator_integration.py life_insurance/tests/ -v
+
+# 簡潔な出力
+pytest common/tests/ tests/test_pension_calculator_integration.py life_insurance/tests/ -q
+```
+
+### テスト構成
+
+| カテゴリ | テスト数 | 説明 |
+|---------|---------|------|
+| **common/tests/** | 163件 | 共通基盤のテスト |
+| - test_base_calculator.py | 28件 | 基底計算機クラス |
+| - test_date_utils.py | 55件 | 日付・年齢ユーティリティ |
+| - test_financial_plan.py | 26件 | FinancialPlanモデル |
+| - test_math_utils.py | 54件 | 金融計算ユーティリティ |
+| **pension_calc** | 13件 | 年金計算統合テスト |
+| **life_insurance/tests/** | 107件 | 生命保険分析テスト |
+| - test_deduction.py | 11件 | 控除計算 |
+| - test_tax.py | 11件 | 税金計算 |
+| - test_insurance_calculator_core.py | 22件 | 保険計算機コア |
+| - test_models.py | 42件 | データモデル |
+| - test_tax_helpers.py | 21件 | 税金ヘルパー |
+| **合計** | **283件** | **100%パス** |
+
+### 個別プロジェクトのテスト
+
+```bash
+# 共通基盤のテスト
+pytest common/tests/ -v
+
+# 生命保険分析のテスト
+pytest life_insurance/tests/ -v
+
+# 年金計算統合テスト
+pytest tests/test_pension_calculator_integration.py -v
+```
+
+## 💡 使用方法
+
+### 1. 統合ランチャーから起動
+
+```bash
+python main.py
+```
+
+対話型メニューから使いたいツールを選択します。
 
 ### 2. 個別プロジェクトの直接起動
 
-# 追加パッケージ
+各プロジェクトを個別に起動することも可能です：
 
-pip install openpyxl yfinance各プロジェクトを個別に起動することも可能です：
+```bash
+# 生命保険分析
+python run_life_insurance_app.py
 
+# 年金シミュレーション
+python run_pension_app.py
+```
 
+### 3. ポート設定
 
-# または pyproject.toml から一括インストール```bash
+複数のStreamlitアプリを同時に起動する場合は、異なるポートを指定してください：
 
-pip install -e .# 生命保険分析
-
-```python scripts/run_life_insurance_app.py
-
-
-
-### 仮想環境の使用（推奨）# 年金シミュレーション  
-
-python scripts/run_pension_app.py
-
-```bash```
-
-# 仮想環境作成
-
-python -m venv .venv### 3. ポート設定
-
-
-
-# 仮想環境の有効化複数のStreamlitアプリを同時に起動する場合は、異なるポートを指定してください：
-
-# Windows PowerShell
-
-.\.venv\Scripts\Activate.ps1```bash
-
-streamlit run life_insurance/ui/streamlit_app.py --server.port=8507
-
-# 依存関係インストールstreamlit run pension_calc/ui/streamlit_app.py --server.port=8508
-
-pip install streamlit pandas plotly numpy matplotlib seaborn openpyxl yfinance```
-
+```bash
+streamlit run life_insurance/ui/streamlit_app.py --server.port=8501
+streamlit run pension_calc/ui/streamlit_app.py --server.port=8502
 ```
 
 ### 4. 比較アプリ（オプション）
 
-## 💡 使用方法
-
 ```bash
-
-### 1. 統合ランチャーから起動streamlit run life_insurance/ui/comparison_app.py --server.port=8510
-
+streamlit run life_insurance/ui/comparison_app.py --server.port=8510
 ```
 
-```bash
+## 📈 主な計算機能
 
-python main.py## 🧪 テスト実行
+### 共通基盤（Phase 3で作成）
 
-```
+- **複利計算**: 現在価値・将来価値・複利現価・複利終価
+- **年金計算**: 年金終価・年金現価（前払・後払）
+- **IRR/NPV計算**: 内部収益率・正味現在価値
+- **日付・年齢計算**: 和暦変換・年齢計算・経過月数計算
+- **税金計算**: 所得税・住民税（累進課税対応）
 
-```bash
+### 生命保険分析
 
-対話型メニューから使いたいツールを選択します。# 全体テスト
-
-python -m pytest tests/
-
-### 2. 個別プロジェクトの直接起動
-
-# 個別プロジェクトのテスト
-
-各プロジェクトを個別に起動することも可能です：python -m pytest life_insurance/tests/
-
-python -m pytest pension_calc/tests/
-
-```bash```
-
-# 生命保険分析
-
-python scripts/run_life_insurance_app.py## 📈 主な計算機能
-
-
-
-# 年金シミュレーション（ポート自動調整機能付き）### 生命保険分析
-
-python scripts/run_pension_app.py --port 8510- 生命保険料控除額計算
-
-```- 実質利回り計算
-
+- 生命保険料控除額計算（旧制度）
+- 実質利回り計算
 - 部分解約シミュレーション
+- 投資信託との比較分析
+- シナリオ分析
+- モンテカルロシミュレーション
 
-### 3. 年金シミュレーターの詳細操作- 投資信託との比較分析
+### 年金計算
 
-
-
-#### キャリアモデルの選択### 年金計算
-
-1. サイドバーの「🎯 キャリアモデルを選択」で`default`または`expanded`を選択- 国民年金・厚生年金の受給額計算
-
-2. ホームタブの「📈 キャリアモデルについて」で詳細を確認- 納付月数・金額の管理
-
+- 国民年金・厚生年金の受給額計算
+- 納付月数・金額の管理
 - 将来受給額の予測
+- 損益分岐点分析
+- キャリアモデル連携
+- 最適受給開始年齢の算出
 
-#### データの編集・保存- 損益分岐点分析
-
-1. 「💰 支払実績」タブでデータを直接編集
-
-2. 「💾 保存」ボタンでCSVに永続化## 🔧 カスタマイズ
-
-3. 「📥 実績ファイルのインポート」でCSV/Excelファイルを取込
-
-### 計算パラメーターの変更
-
-#### 高度分析の活用各プロジェクトの設定ファイルで、税率や手数料率などのパラメーターを調整できます。
-
-1. 「📊 損益分岐・最適化」タブで詳細分析
-
-2. 損益分岐点・最適受給開始年齢・投資回収率を確認### UI のカスタマイズ
-
-3. インタラクティブなグラフで推移を可視化Streamlitアプリのレイアウトや表示項目は、各 `streamlit_app.py` ファイルで変更可能です。
+## 🔧 カスタマイズ
 
 
 
@@ -389,17 +317,39 @@ python -m pytest pension_calc/tests/## 📞 サポート
 ## 🔧 カスタマイズ
 
 ### キャリアモデルの調整
+
 `pension_calc/core/pension_utils.py`の`get_career_model()`関数で、年齢・役職・年収の設定を変更可能。
 
 ### 計算パラメーターの変更
+
 各プロジェクトの設定ファイルで、税率や手数料率などのパラメーターを調整できます。
 
 ### UIのカスタマイズ
+
 Streamlitアプリのレイアウトや表示項目は、各`streamlit_app.py`ファイルで変更可能です。
 
 ## 📊 技術仕様
 
+### アーキテクチャ（Phase 3-4で構築）
+
+- **共通基盤**: 複数プロジェクト間でコードを共有
+  - 基底計算機クラス（複利計算Mixin付き）
+  - 日付・年齢・和暦ユーティリティ
+  - 金融計算ユーティリティ（複利、年金、IRR、NPV）
+  - FinancialPlanモデル
+
+- **テスト駆動開発**: 283件のテスト（100%パス、2.13秒）
+  - 共通基盤: 163件
+  - 年金計算: 13件
+  - 生命保険: 107件
+
+- **高品質な設計**:
+  - 公開APIをテスト（内部実装の詳細はテストしない）
+  - 実装と期待値の統一
+  - レガシーコードの削減
+
 ### 年金シミュレーター（高度版）の特徴
+
 - **タブベースUI**: 6つの専門タブによる機能分離
 - **リアルタイム計算**: パラメーター変更時の即座な再計算
 - **データ永続化**: pandas DataFrameのCSV保存・読込
@@ -407,38 +357,107 @@ Streamlitアプリのレイアウトや表示項目は、各`streamlit_app.py`�
 - **高精度計算**: 厚生年金料率18.3%、調整率0.4%/0.7%を正確に適用
 
 ### 対応データ形式
+
 - **入力**: CSV、Excel（.xlsx/.xls）
 - **出力**: CSV、インタラクティブグラフ（Plotly）
 - **データ構造**: 年度・年齢・加入制度・お勤め先・加入月数・納付額・推定年収
 
-## 📄 ライセンス
+### パフォーマンス
+
+- **テスト実行**: 2.13秒（283件）
+- **Streamlitアプリ**: 1-5秒（初期表示 + 計算）
+- **グラフ描画**: Plotlyによる高速レンダリング
+
+## � ドキュメント
+
+### プロジェクトドキュメント
+
+- **README.md** (このファイル): プロジェクト概要とセットアップ
+- **.github/copilot-instructions.md**: AI作業指示書（開発者向け）
+
+### Phase 3: 共通基盤構築
+
+- **REFACTORING/PHASE_3/IMPLEMENTATION_PLAN.md**: Phase 3実装計画
+- **REFACTORING/PHASE_3/COMPLETION_REPORT.md**: Phase 3完了レポート
+- **REFACTORING/COMMON_BASE_DESIGN.md**: 共通基盤の設計ドキュメント
+
+### Phase 4: レガシーテスト対応
+
+- **REFACTORING/PHASE_4/IMPLEMENTATION_PLAN.md**: Phase 4実装計画
+- **REFACTORING/PHASE_4/COMPLETION_REPORT.md**: Phase 4完了レポート
+- **REFACTORING/PHASE_4/UI_OPTIMIZATION_ANALYSIS.md**: UI最適化分析
+- **REFACTORING/LEGACY_TESTS_PLAN.md**: レガシーテスト対応計画
+
+## 🎓 開発の歴史
+
+### Phase 1: プロジェクト基盤整備とTDD（2024年）
+
+- 生命保険分析ツールの基礎開発
+- 年金シミュレーターの基礎開発
+- テスト駆動開発の導入
+
+### Phase 2: コア機能の統合と基盤構築（2024年）
+
+- 2つのプロジェクトを統合
+- 統合ランチャーの作成
+- 基本的な機能統合
+
+### Phase 3: 共通基盤の作成（2025年10月）
+
+- **目標**: 重複コードの削減、保守性向上
+- **成果**: 
+  - 共通基盤の構築（4モジュール）
+  - 163件のテストを作成
+  - 261件のテストが全パス
+
+### Phase 4: レガシーテスト対応（2025年11月）
+
+- **目標**: レガシーテスト29件の対応
+- **成果**:
+  - レガシーテスト29件 → 0件（100%解消）
+  - 283件のテストが全パス（100%）
+  - 実行時間: 2.13秒（高速）
+  - 技術的負債削減: 不要なテスト41件を削除
+
+## �📄 ライセンス
 
 このプロジェクトは個人利用目的で作成されています。
 
 ## 🤝 コントリビューション
 
-改善提案やバグ報告は歓迎します。`FEATURE_COMPARISON.md`に詳細な機能比較を記載しています。
+改善提案やバグ報告は歓迎します。
 
 ## 📞 サポート
 
 質問や問題がある場合は、以下を参照してください：
 - 各プロジェクトのコードコメント
-- `📋 計算方法`タブの詳細説明
+- `📋 計算方法`タブの詳細説明（年金シミュレーター）
 - `🛠️ 開発者情報`サイドバーでのデバッグ情報
-
-## 🗂️ 関連ドキュメント
-
-- `FEATURE_COMPARISON.md`: 詳細な機能比較と統合状況
-- `.github/copilot-instructions.md`: AI作業指示書（開発者向け）
+- `REFACTORING/`ディレクトリ内のドキュメント
 
 ## 📝 データ編集の使い方
 
-1. アプリを起動（例: `python main.py` または `streamlit run ...`）
-2. 「データ編集」タブまたは「月次データ管理」画面に移動
-3. 編集テーブル（data_editor）が表示されます
-4. 編集したいセル（銘柄・投資方法・証券会社・備考など）をクリックして直接修正
-5. 編集後は「保存」ボタン（または「更新」ボタン）があればクリック
-6. 変更内容は即座に反映され、グラフや分析も自動更新されます
+### 年金シミュレーター
 
-- 一括登録の場合は、空欄以外の行のみまとめて登録されます
-- 編集内容はCSVとしてエクスポート可能です
+1. 「💰 支払実績」タブでデータを直接編集
+2. 「💾 保存」ボタンでCSVに永続化
+3. 「📥 実績ファイルのインポート」でCSV/Excelファイルを取込
+
+### 投資シミュレーター
+
+1. 「月次データ管理」画面に移動
+2. 編集テーブル（data_editor）でセルを直接修正
+3. 「保存」ボタンまたは「更新」ボタンで保存
+4. 変更内容は即座に反映され、グラフも自動更新
+
+### データ形式
+
+- CSV形式でのエクスポート・インポート
+- Excel形式（.xlsx/.xls）の取込
+- 一括登録の場合は、空欄以外の行のみ登録
+
+---
+
+**最終更新**: 2025年11月3日（Phase 4完了）  
+**バージョン**: v0.6.0-phase4-complete  
+**テスト成功率**: 100%（283件/283件）
