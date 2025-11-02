@@ -27,6 +27,10 @@ import plotly.graph_objects as go
 from life_insurance.core.deduction_calculator import LifeInsuranceDeductionCalculator
 from life_insurance.core.tax_calculator import TaxCalculator
 
+# Phase 2統合: InsuranceCalculatorとモデル
+from life_insurance.analysis.insurance_calculator import InsuranceCalculator
+from life_insurance.models import InsurancePlan, FundPlan
+
 
 def main():
     """保険 vs 投資信託比較アプリ"""
@@ -211,24 +215,15 @@ def calculate_insurance_investment_scenario(monthly_amount, annual_income, insur
                                          setup_fee_rate, monthly_fee_rate, withdrawal_strategy, 
                                          investment_return, investment_fee, years, tax_calc, 
                                          reinvest_strategy):
-    """保険＋投資信託シナリオ計算"""
+    """
+    保険＋投資信託シナリオ計算
+    
+    Phase 2で統合されたInsuranceCalculatorを使用。
+    """
     
     # 年間保険料と控除計算
     annual_premium = monthly_amount * 12
-    
-    # 旧生命保険料控除計算（控除限度額: 50,000円）
-    if annual_premium <= 25000:
-        deduction = annual_premium
-    elif annual_premium <= 50000:
-        deduction = annual_premium * 0.5 + 12500
-    elif annual_premium <= 100000:
-        deduction = annual_premium * 0.25 + 25000
-    else:
-        deduction = 50000
-    
-    # 税額軽減計算
-    tax_savings_detail = tax_calc.calculate_tax_savings(deduction, annual_income)
-    annual_tax_savings = tax_savings_detail['合計節税額']
+    monthly_premium = monthly_amount
     
     # 引き出しタイミングの決定
     if withdrawal_strategy == "元本回収後すぐに投資信託へ":
@@ -242,54 +237,55 @@ def calculate_insurance_investment_scenario(monthly_amount, annual_income, insur
     else:
         withdrawal_year = years  # 満期まで継続
     
+    # InsurancePlanに変換
+    insurance_plan = InsurancePlan(
+        monthly_premium=monthly_premium,
+        annual_rate=insurance_return * 100,
+        investment_period=years,
+        fee_rate=setup_fee_rate,
+        balance_fee_rate=monthly_fee_rate / 12,  # 月次手数料に変換
+        withdrawal_fee_rate=0.01
+    )
+    
+    # FundPlanに変換
+    net_investment_return = investment_return - investment_fee
+    fund_plan = FundPlan(
+        annual_return=net_investment_return * 100,
+        annual_fee=0.0,  # 既に差し引き済み
+        capital_gains_tax_rate=0.20315,
+        reinvestment_rate=1.0 if reinvest_strategy == "引き出し額＋継続月額投資" else 0.0,
+        use_nisa=False
+    )
+    
+    # InsuranceCalculatorで計算
+    calculator = InsuranceCalculator()
+    result = calculator.calculate_switching_value(
+        insurance_plan=insurance_plan,
+        switch_year=withdrawal_year,
+        fund_plan=fund_plan,
+        taxable_income=annual_income
+    )
+    
+    # 年次結果を生成
     results = []
     total_invested = 0
-    insurance_value = 0
-    investment_value = 0
-    total_tax_savings = 0
-    
-    net_investment_return = investment_return - investment_fee
     
     for year in range(1, years + 1):
+        total_invested = annual_premium * year
+        
         if year <= withdrawal_year:
             # 保険期間中
-            total_invested += annual_premium
-            total_tax_savings += annual_tax_savings
-            
-            if year == 1:
-                # 初年度は手数料を差し引く
-                insurance_value = annual_premium * (1 - setup_fee_rate)
-            else:
-                insurance_value += annual_premium
-            
-            # 年間手数料と利息を適用
-            annual_fee = insurance_value * monthly_fee_rate
-            annual_interest = insurance_value * insurance_return
-            insurance_value += annual_interest - annual_fee
-            
-        elif year == withdrawal_year + 1 and withdrawal_year < years:
-            # 引き出し年
-            if reinvest_strategy == "一括投資信託へ":
-                investment_value = insurance_value
-                insurance_value = 0
-                # この年は新規投資なし
-            else:
-                investment_value = insurance_value
-                insurance_value = 0
-                # 引き続き月額投資
-                total_invested += annual_premium
-                investment_value += annual_premium * (1 + net_investment_return / 2)
-            
-            investment_value *= (1 + net_investment_return)
-        
-        elif year > withdrawal_year:
-            # 投資信託期間
-            if reinvest_strategy != "保険継続":
-                if reinvest_strategy == "引き出し額＋継続月額投資":
-                    total_invested += annual_premium
-                    investment_value += annual_premium * (1 + net_investment_return / 2)
-                
-                investment_value *= (1 + net_investment_return)
+            # 簡易推定（線形補間）
+            insurance_value = result.surrender_value * (year / withdrawal_year)
+            investment_value = 0
+            total_tax_savings = result.tax_benefit * (year / years)
+        else:
+            # 引き出し後
+            insurance_value = 0
+            # 投資信託価値の推定
+            remaining_ratio = (year - withdrawal_year) / (years - withdrawal_year)
+            investment_value = result.reinvestment_value * remaining_ratio
+            total_tax_savings = result.tax_benefit
         
         total_value = insurance_value + investment_value + total_tax_savings
         
@@ -309,23 +305,41 @@ def calculate_insurance_investment_scenario(monthly_amount, annual_income, insur
 
 
 def calculate_breakeven_year(annual_premium, insurance_return, setup_fee_rate, monthly_fee_rate):
-    """元本回収年を計算"""
-    value = annual_premium * (1 - setup_fee_rate)
+    """
+    元本回収年を計算
     
-    for year in range(1, 31):  # 最大30年
-        if year > 1:
-            value += annual_premium
-        
-        # 年間手数料と利息
-        annual_fee = value * monthly_fee_rate
-        annual_interest = value * insurance_return
-        value += annual_interest - annual_fee
-        
-        total_invested = annual_premium * year
-        if value >= total_invested:
-            return year
+    Phase 2で統合されたInsuranceCalculatorを使用。
+    """
+    monthly_premium = annual_premium / 12
     
-    return 30  # 30年以内に回収できない場合
+    # InsurancePlanに変換
+    insurance_plan = InsurancePlan(
+        monthly_premium=monthly_premium,
+        annual_rate=insurance_return * 100,
+        investment_period=30,  # 最大30年
+        fee_rate=setup_fee_rate,
+        balance_fee_rate=monthly_fee_rate / 12,  # 月次手数料
+        withdrawal_fee_rate=0.0
+    )
+    
+    # FundPlanはダミー（使用しない）
+    fund_plan = FundPlan(
+        annual_return=0.0,
+        annual_fee=0.0,
+        capital_gains_tax_rate=0.20315,
+        reinvestment_rate=0.0,
+        use_nisa=False
+    )
+    
+    # InsuranceCalculatorで計算
+    calculator = InsuranceCalculator()
+    breakeven_year = calculator.calculate_breakeven_year(
+        insurance_plan=insurance_plan,
+        fund_plan=fund_plan,
+        max_years=30
+    )
+    
+    return breakeven_year if breakeven_year else 30
 
 
 def display_comparison_results(investment_scenario, insurance_scenario, years, monthly_amount, withdrawal_strategy):

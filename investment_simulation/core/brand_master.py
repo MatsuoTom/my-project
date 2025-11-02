@@ -53,11 +53,57 @@ class BrandMaster:
                     self.brands = data.get('brands', [])
                     self.methods = data.get('methods', [])
                     self.brokers = data.get('brokers', [])
+                    # データマイグレーション
+                    self._migrate_data()
             except Exception as e:
                 print(f"マスタデータ読み込みエラー: {e}")
                 self._initialize_default_data()
         else:
             self._initialize_default_data()
+    
+    def _migrate_data(self):
+        """
+        既存データを新しい構造にマイグレーション
+        - profit フィールドがない場合: current_price - principal で計算
+        - investment_date フィールドがない場合: 空文字列を設定
+        """
+        needs_save = False
+        for brand in self.brands:
+            # profit フィールドがない場合
+            if 'profit' not in brand:
+                current_price = brand.get('current_price', 0.0)
+                principal = brand.get('principal', 0.0)
+                brand['profit'] = current_price - principal
+                needs_save = True
+            
+            # investment_date フィールドがない場合
+            if 'investment_date' not in brand:
+                brand['investment_date'] = ""
+                needs_save = True
+            
+            # principal フィールドがない場合（新規追加対応）
+            if 'principal' not in brand:
+                current_price = brand.get('current_price', 0.0)
+                profit = brand.get('profit', 0.0)
+                brand['principal'] = current_price - profit
+                needs_save = True
+            
+            # profit_rate フィールドの再計算
+            if 'profit_rate' not in brand or needs_save:
+                principal = brand.get('principal', 0.0)
+                profit = brand.get('profit', 0.0)
+                brand['profit_rate'] = (profit / principal * 100) if principal > 0 else 0.0
+            
+            # annual_return フィールドの再計算
+            if 'annual_return' not in brand or needs_save:
+                profit = brand.get('profit', 0.0)
+                principal = brand.get('principal', 0.0)
+                investment_date = brand.get('investment_date', '')
+                brand['annual_return'] = self._calculate_annual_return(profit, principal, investment_date)
+        
+        if needs_save:
+            print("データマイグレーション実行: 新しいフィールドを追加しました")
+            self._save_master()
     
     def _save_master(self) -> bool:
         """

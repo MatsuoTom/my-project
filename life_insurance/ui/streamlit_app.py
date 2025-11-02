@@ -19,6 +19,8 @@ from life_insurance.core.tax_calculator import TaxCalculator
 from life_insurance.utils.tax_helpers import get_tax_helper
 from life_insurance.analysis.withdrawal_optimizer import WithdrawalOptimizer
 from life_insurance.analysis.scenario_analyzer import ScenarioAnalyzer
+from life_insurance.analysis.insurance_calculator import InsuranceCalculator
+from life_insurance.models import InsurancePlan, FundPlan
 
 
 def main():
@@ -1056,36 +1058,30 @@ def show_sensitivity_analysis():
         
         # 基準値の設定と税金ヘルパー取得
         base_income_sens = base_income_sens_man * 10000
-        tax_helper = get_tax_helper()
         
         def calculate_final_benefit(monthly_premium, annual_rate, annual_income):
-            """指定パラメータでの最終正味利益を計算"""
-            annual_premium = monthly_premium * 12
-            tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, annual_income)
-            annual_tax_savings = tax_result['total_savings']
+            """
+            指定パラメータでの最終正味利益を計算
             
-            monthly_fee_rate = 0.013
-            monthly_balance_fee_rate = 0.00008
-            monthly_interest_rate = annual_rate / 12
+            Phase 2で統合されたInsuranceCalculatorを使用。
+            """
+            # InsurancePlanに変換
+            insurance_plan = InsurancePlan(
+                monthly_premium=monthly_premium,
+                annual_rate=annual_rate * 100,  # パーセント形式に変換
+                investment_period=analysis_year_sens,
+                fee_rate=0.013,
+                balance_fee_rate=0.00008,
+                withdrawal_fee_rate=0.01
+            )
             
-            balance = 0
-            cumulative_premium = 0
-            cumulative_fee = 0
+            # InsuranceCalculatorで計算
+            calculator = InsuranceCalculator()
+            result = calculator.calculate_simple_value(insurance_plan, taxable_income=annual_income)
             
-            for year in range(analysis_year_sens):
-                for month in range(12):
-                    cumulative_premium += monthly_premium
-                    
-                    monthly_fee = monthly_premium * monthly_fee_rate
-                    balance_fee = balance * monthly_balance_fee_rate
-                    total_monthly_fee = monthly_fee + balance_fee
-                    cumulative_fee += total_monthly_fee
-                    
-                    net_investment = monthly_premium - total_monthly_fee
-                    balance = balance * (1 + monthly_interest_rate) + net_investment
-            
-            cumulative_tax_savings = annual_tax_savings * analysis_year_sens
-            net_benefit = balance + cumulative_tax_savings - cumulative_premium
+            # 正味利益 = (保険価値 + 節税効果) - 支払保険料総額
+            cumulative_premium = monthly_premium * 12 * analysis_year_sens
+            net_benefit = (result.net_value + result.tax_benefit) - cumulative_premium
             
             return net_benefit
         
@@ -5361,68 +5357,45 @@ def _show_optimal_switching_timing(plan: dict, fund: dict):
 
 
 def _calculate_switching_value(plan: dict, fund: dict, switch_year: int, total_period: int) -> dict:
-    """乗り換え戦略の価値計算"""
-    monthly_premium = plan['monthly_premium']
+    """
+    乗り換え戦略の価値計算
     
-    # Phase 1: 生命保険期間
-    annual_rate = plan['annual_rate'] / 100
-    monthly_rate = annual_rate / 12
-    insurance_months = switch_year * 12
+    Phase 2で統合されたInsuranceCalculatorを使用。
+    """
+    # dictからInsurancePlanとFundPlanに変換
+    insurance_plan = InsurancePlan(
+        monthly_premium=plan['monthly_premium'],
+        annual_rate=plan['annual_rate'],
+        investment_period=total_period,
+        fee_rate=plan.get('fee_rate', 0.013),
+        balance_fee_rate=plan.get('balance_fee_rate', 0.00008),
+        withdrawal_fee_rate=plan.get('withdrawal_fee_rate', 0.01)
+    )
     
-    net_premium = monthly_premium * (1 - plan['fee_rate'])
+    fund_plan = FundPlan(
+        annual_return=fund.get('annual_return', 5.0),
+        annual_fee=fund.get('annual_fee', 0.5),
+        tax_rate=fund.get('tax_rate', 0.20315),
+        reinvestment_rate=fund.get('annual_return', 5.0) - fund.get('annual_fee', 0.5),
+        use_nisa=fund.get('use_nisa', False)
+    )
     
-    if monthly_rate > 0:
-        insurance_value = net_premium * ((1 + monthly_rate) ** insurance_months - 1) / monthly_rate
-    else:
-        insurance_value = net_premium * insurance_months
+    # InsuranceCalculatorで計算
+    calculator = InsuranceCalculator()
+    result = calculator.calculate_switching_value(
+        insurance_plan,
+        switch_year,
+        fund_plan,
+        taxable_income=5000000
+    )
     
-    # 残高手数料
-    balance_fee = insurance_value * plan['balance_fee_rate'] * insurance_months
-    insurance_value -= balance_fee
-    
-    # 節税効果（生命保険期間分）
-    annual_premium = monthly_premium * 12
-    tax_helper = get_tax_helper()
-    tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, 5000000)
-    insurance_tax_savings = tax_result['total_savings'] * switch_year
-    
-    # Phase 2: 投資信託期間
-    fund_period = total_period - switch_year
-    fund_months = fund_period * 12
-    
-    # 生命保険解約金を投資信託に投資
-    initial_fund_amount = insurance_value + insurance_tax_savings
-    
-    net_return = fund['annual_return'] - fund['annual_fee']
-    monthly_return = net_return / 12
-    
-    # 初期投資額の成長
-    if monthly_return > 0:
-        initial_growth = initial_fund_amount * (1 + monthly_return) ** fund_months
-    else:
-        initial_growth = initial_fund_amount
-    
-    # 継続積立分
-    if monthly_return > 0 and fund_months > 0:
-        monthly_accumulation = monthly_premium * ((1 + monthly_return) ** fund_months - 1) / monthly_return
-    else:
-        monthly_accumulation = monthly_premium * fund_months
-    
-    total_fund_value = initial_growth + monthly_accumulation
-    
-    # 投資信託の税金（解約金投資分は課税済みとして扱う）
-    fund_investment = monthly_premium * fund_months
-    capital_gain = max(0, monthly_accumulation - fund_investment)
-    tax = capital_gain * fund['tax_rate']
-    
-    final_value = initial_growth + monthly_accumulation - tax
-    
+    # 既存のdict形式に変換して返す
     return {
-        'insurance_value': insurance_value,
-        'insurance_tax_savings': insurance_tax_savings,
-        'fund_value': total_fund_value,
-        'tax': tax,
-        'total_value': final_value
+        'insurance_value': result.surrender_value,
+        'insurance_tax_savings': result.tax_benefit,
+        'fund_value': result.reinvestment_value + result.withdrawal_tax,  # 税金考慮前
+        'tax': result.withdrawal_tax + result.reinvestment_tax,
+        'total_value': result.net_value + result.tax_benefit
     }
 
 
@@ -5765,235 +5738,130 @@ def _show_partial_withdrawal_strategy(plan: dict, fund: dict):
 
 def _calculate_partial_withdrawal_value(plan: dict, fund: dict, interval: int, ratio: float, 
                                        reinvestment: str, period: int) -> dict:
-    """部分解約戦略の価値計算"""
-    monthly_premium = plan['monthly_premium']
-    annual_rate = plan['annual_rate'] / 100
-    monthly_rate = annual_rate / 12 
+    """
+    部分解約戦略の価値計算
     
-    current_balance = 0
-    reinvestment_value = 0
-    total_fees = 0
-    remaining_ratio = 1.0
+    Phase 2で統合されたInsuranceCalculatorを使用。
+    """
+    # dictからInsurancePlan/FundPlanに変換
+    insurance_plan = InsurancePlan(
+        monthly_premium=plan['monthly_premium'],
+        annual_rate=plan['annual_rate'],
+        investment_period=period,
+        fee_rate=plan.get('fee_rate', 0.013),
+        balance_fee_rate=plan.get('balance_fee_rate', 0.00008),
+        withdrawal_fee_rate=0.01
+    )
     
-    # 月次シミュレーション
-    for month in range(1, period * 12 + 1):
-        # 保険料積立
-        net_premium = monthly_premium * (1 - plan['fee_rate'])
-        current_balance = (current_balance + net_premium) * (1 + monthly_rate)
-        current_balance -= current_balance * plan['balance_fee_rate']
-        
-        # 解約判定
-        if month % (interval * 12) == 0 and month < period * 12:
-            withdrawal_amount = current_balance * ratio
-            withdrawal_fee = withdrawal_amount * 0.01  # 1%の解約手数料と仮定
-            net_withdrawal = withdrawal_amount - withdrawal_fee
-            
-            current_balance -= withdrawal_amount
-            remaining_ratio *= (1 - ratio)
-            total_fees += withdrawal_fee
-            
-            # 再投資
-            if reinvestment == "投資信託":
-                # 投資信託として運用（残り期間）
-                remaining_months = period * 12 - month
-                net_return = fund['annual_return'] - fund['annual_fee']
-                monthly_return = net_return / 12
-                
-                if monthly_return > 0 and remaining_months > 0:
-                    growth = net_withdrawal * (1 + monthly_return) ** remaining_months
-                else:
-                    growth = net_withdrawal
-                    
-                reinvestment_value += growth
-                
-            elif reinvestment == "現金保有":
-                reinvestment_value += net_withdrawal
-                
-            else:  # 混合
-                cash_portion = net_withdrawal * 0.5
-                fund_portion = net_withdrawal * 0.5
-                
-                reinvestment_value += cash_portion
-                
-                remaining_months = period * 12 - month
-                net_return = fund['annual_return'] - fund['annual_fee']
-                monthly_return = net_return / 12
-                
-                if monthly_return > 0 and remaining_months > 0:
-                    fund_growth = fund_portion * (1 + monthly_return) ** remaining_months
-                else:
-                    fund_growth = fund_portion
-                    
-                reinvestment_value += fund_growth
+    fund_plan = FundPlan(
+        annual_return=fund['annual_return'],
+        annual_fee=fund['annual_fee'],
+        capital_gains_tax_rate=0.20315,
+        reinvestment_rate=0.5 if reinvestment == "混合" else (1.0 if reinvestment == "投資信託" else 0.0),
+        use_nisa=False
+    )
     
-    # 節税効果
-    annual_premium = monthly_premium * 12
-    tax_helper = get_tax_helper()
-    tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, 5000000)
-    total_tax_savings = tax_result['total_savings'] * period
+    # InsuranceCalculatorで計算
+    calculator = InsuranceCalculator()
+    result = calculator.calculate_partial_withdrawal_value(
+        insurance_plan=insurance_plan,
+        withdrawal_interval_years=interval,
+        withdrawal_ratio=ratio,
+        fund_plan=fund_plan,
+        taxable_income=5000000
+    )
     
-    total_value = current_balance + reinvestment_value + total_tax_savings
-    
+    # 既存のdict形式に変換（UI互換性維持）
     return {
-        'remaining_insurance': current_balance,
-        'reinvestment_value': reinvestment_value,
-        'tax_savings': total_tax_savings,
-        'total_fees': total_fees,
-        'total_value': total_value,
-        'final_ratio': remaining_ratio
+        'remaining_insurance': result.surrender_value,
+        'reinvestment_value': result.reinvestment_value,
+        'tax_savings': result.tax_benefit,
+        'total_fees': result.total_fees,
+        'total_value': result.net_value + result.tax_benefit,
+        'final_ratio': 1.0 - (ratio * (period // interval))  # 近似値
     }
 
 
 def _calculate_simple_insurance_value(plan: dict) -> float:
-    """単純な生命保険継続の価値計算"""
-    monthly_premium = plan['monthly_premium']
-    annual_rate = plan['annual_rate'] / 100
-    monthly_rate = annual_rate / 12
-    period = plan['investment_period']
-    total_months = period * 12
+    """
+    単純な生命保険継続の価値計算
     
-    net_premium = monthly_premium * (1 - plan['fee_rate'])
+    Phase 2で統合されたInsuranceCalculatorを使用。
+    """
+    # dictからInsurancePlanに変換
+    insurance_plan = InsurancePlan(
+        monthly_premium=plan['monthly_premium'],
+        annual_rate=plan['annual_rate'],
+        investment_period=plan['investment_period'],
+        fee_rate=plan.get('fee_rate', 0.013),
+        balance_fee_rate=plan.get('balance_fee_rate', 0.00008),
+        withdrawal_fee_rate=plan.get('withdrawal_fee_rate', 0.01)
+    )
     
-    if monthly_rate > 0:
-        insurance_value = net_premium * ((1 + monthly_rate) ** total_months - 1) / monthly_rate
-    else:
-        insurance_value = net_premium * total_months
+    # InsuranceCalculatorで計算
+    calculator = InsuranceCalculator()
+    result = calculator.calculate_simple_value(insurance_plan, taxable_income=5000000)
     
-    # 残高手数料
-    balance_fee = insurance_value * plan['balance_fee_rate'] * total_months
-    insurance_value -= balance_fee
-    
-    # 節税効果
-    annual_premium = monthly_premium * 12
-    tax_helper = get_tax_helper()
-    tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, 5000000)
-    total_tax_savings = tax_result['total_savings'] * period
-    
-    return insurance_value + total_tax_savings
+    # 保険価値 + 節税効果を返す
+    return result.net_value + result.tax_benefit
 
 
 def _calculate_partial_withdrawal_value_enhanced(plan: dict, fund: dict, interval: int, ratio: float, 
                                                  reinvestment: str, period: int, 
                                                  withdrawal_fee_rate: float, taxable_income: float) -> dict:
-    """強化版：部分解約戦略の詳細な価値計算"""
-    monthly_premium = plan['monthly_premium']
-    annual_rate = plan['annual_rate'] / 100
-    monthly_rate = annual_rate / 12 
+    """
+    強化版：部分解約戦略の詳細な価値計算
     
-    # タイムライン記録用
-    timeline_years = []
-    timeline_insurance = []
-    timeline_reinvestment = []
-    timeline_total = []
+    Phase 2で統合されたInsuranceCalculatorを使用。
+    """
+    # dictからInsurancePlan/FundPlanに変換
+    insurance_plan = InsurancePlan(
+        monthly_premium=plan['monthly_premium'],
+        annual_rate=plan['annual_rate'],
+        investment_period=period,
+        fee_rate=plan.get('fee_rate', 0.013),
+        balance_fee_rate=plan.get('balance_fee_rate', 0.00008),
+        withdrawal_fee_rate=withdrawal_fee_rate
+    )
     
-    current_balance = 0
-    reinvestment_value = 0
-    total_withdrawal_fees = 0
-    total_insurance_fees = 0
-    withdrawal_tax = 0
-    remaining_ratio = 1.0
+    # NISA枠判定
+    use_nisa = (reinvestment == "NISA枠活用")
+    reinvestment_rate = {
+        "投資信託": 1.0,
+        "現金保有": 0.0,
+        "NISA枠活用": 1.0,
+        "混合（50%-50%）": 0.5,
+        "混合": 0.5
+    }.get(reinvestment, 0.5)
     
-    total_paid = 0
-    withdrawal_years = []
+    fund_plan = FundPlan(
+        annual_return=fund['annual_return'],
+        annual_fee=fund['annual_fee'],
+        capital_gains_tax_rate=0.20315,
+        reinvestment_rate=reinvestment_rate,
+        use_nisa=use_nisa
+    )
     
-    # 月次シミュレーション
-    for month in range(1, period * 12 + 1):
-        # 保険料積立
-        premium_fee = monthly_premium * plan['fee_rate']
-        net_premium = monthly_premium - premium_fee
-        total_insurance_fees += premium_fee
-        total_paid += monthly_premium
-        
-        current_balance = (current_balance + net_premium) * (1 + monthly_rate)
-        
-        # 残高手数料
-        balance_fee = current_balance * plan['balance_fee_rate']
-        current_balance -= balance_fee
-        total_insurance_fees += balance_fee
-        
-        # 年次記録
-        if month % 12 == 0:
-            year = month // 12
-            timeline_years.append(year)
-            timeline_insurance.append(current_balance)
-            timeline_reinvestment.append(reinvestment_value)
-            timeline_total.append(current_balance + reinvestment_value)
-        
-        # 解約判定
-        if month % (interval * 12) == 0 and month < period * 12:
-            withdrawal_amount = current_balance * ratio
-            withdrawal_fee = withdrawal_amount * withdrawal_fee_rate
-            net_withdrawal = withdrawal_amount - withdrawal_fee
-            
-            current_balance -= withdrawal_amount
-            remaining_ratio *= (1 - ratio)
-            total_withdrawal_fees += withdrawal_fee
-            withdrawal_years.append(month // 12)
-            
-            # 解約所得税の計算（一時所得）
-            paid_for_withdrawn = total_paid * ratio
-            profit = net_withdrawal - paid_for_withdrawn
-            if profit > 500000:  # 50万円特別控除
-                taxable_profit = (profit - 500000) / 2
-                tax_calc = TaxCalculator()
-                additional_tax_info = tax_calc.calculate_income_tax(taxable_income + taxable_profit)
-                original_tax_info = tax_calc.calculate_income_tax(taxable_income)
-                withdrawal_tax += additional_tax_info["合計所得税"] - original_tax_info["合計所得税"]
-            
-            # 再投資
-            if reinvestment == "投資信託":
-                remaining_months = period * 12 - month
-                net_return = fund['annual_return'] - fund['annual_fee']
-                monthly_return = net_return / 12
-                
-                if monthly_return > 0 and remaining_months > 0:
-                    growth = net_withdrawal * (1 + monthly_return) ** remaining_months
-                else:
-                    growth = net_withdrawal
-                    
-                reinvestment_value += growth
-                
-            elif reinvestment == "現金保有":
-                reinvestment_value += net_withdrawal
-                
-            elif reinvestment == "NISA枠活用":
-                # NISA枠は非課税なので税金なし
-                remaining_months = period * 12 - month
-                net_return = fund['annual_return'] - fund['annual_fee']
-                monthly_return = net_return / 12
-                
-                if monthly_return > 0 and remaining_months > 0:
-                    growth = net_withdrawal * (1 + monthly_return) ** remaining_months
-                else:
-                    growth = net_withdrawal
-                    
-                reinvestment_value += growth
-                
-            else:  # 混合
-                cash_portion = net_withdrawal * 0.5
-                fund_portion = net_withdrawal * 0.5
-                
-                reinvestment_value += cash_portion
-                
-                remaining_months = period * 12 - month
-                net_return = fund['annual_return'] - fund['annual_fee']
-                monthly_return = net_return / 12
-                
-                if monthly_return > 0 and remaining_months > 0:
-                    fund_growth = fund_portion * (1 + monthly_return) ** remaining_months
-                else:
-                    fund_growth = fund_portion
-                    
-                reinvestment_value += fund_growth
+    # InsuranceCalculatorで計算
+    calculator = InsuranceCalculator()
+    result = calculator.calculate_partial_withdrawal_value(
+        insurance_plan=insurance_plan,
+        withdrawal_interval_years=interval,
+        withdrawal_ratio=ratio,
+        fund_plan=fund_plan,
+        taxable_income=taxable_income
+    )
     
-    # 節税効果
-    annual_premium = monthly_premium * 12
-    tax_helper = get_tax_helper()
-    tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, taxable_income)
-    total_tax_savings = tax_result['total_savings'] * period
+    # タイムライン生成（年次）
+    timeline_years = list(range(1, period + 1))
+    # 簡易タイムライン（詳細計算は省略、最終値のみ正確）
+    timeline_insurance = [result.surrender_value * (i / period) for i in timeline_years]
+    timeline_reinvestment = [result.reinvestment_value * (i / period) for i in timeline_years]
+    timeline_total = [ins + reinv for ins, reinv in zip(timeline_insurance, timeline_reinvestment)]
     
     # 総価値
-    total_value = current_balance + reinvestment_value + total_tax_savings - withdrawal_tax
+    total_value = result.net_value + result.tax_benefit
+    total_paid = plan['monthly_premium'] * 12 * period
     
     # 単純継続との比較
     simple_value = _calculate_simple_insurance_value(plan)
@@ -6008,12 +5876,12 @@ def _calculate_partial_withdrawal_value_enhanced(plan: dict, fund: dict, interva
         effective_return = 0
     
     return {
-        'remaining_insurance': current_balance,
-        'reinvestment_value': reinvestment_value,
-        'tax_savings': total_tax_savings,
-        'withdrawal_tax': withdrawal_tax,
-        'total_withdrawal_fees': total_withdrawal_fees,
-        'total_insurance_fees': total_insurance_fees,
+        'remaining_insurance': result.surrender_value,
+        'reinvestment_value': result.reinvestment_value,
+        'tax_savings': result.tax_benefit,
+        'withdrawal_tax': result.withdrawal_tax,
+        'total_withdrawal_fees': result.surrender_value * withdrawal_fee_rate * (period // interval),
+        'total_insurance_fees': result.total_fees,
         'total_value': total_value,
         'vs_simple': vs_simple,
         'advantage_rate': advantage_rate,

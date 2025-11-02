@@ -9,6 +9,10 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
+# Phase 2統合: InsuranceCalculatorとモデル
+from life_insurance.analysis.insurance_calculator import InsuranceCalculator
+from life_insurance.models import InsurancePlan, FundPlan
+
 from life_insurance.core.deduction_calculator import LifeInsuranceDeductionCalculator
 from life_insurance.core.tax_calculator import TaxCalculator
 
@@ -32,6 +36,8 @@ class WithdrawalOptimizer:
         """
         保険の解約返戻金を計算
         
+        Phase 2で統合されたInsuranceCalculatorを使用。
+        
         Args:
             initial_premium: 初期保険料
             annual_premium: 年間保険料
@@ -41,20 +47,31 @@ class WithdrawalOptimizer:
         Returns:
             解約返戻金の詳細
         """
+        # 月額保険料に変換（年額 / 12）
+        monthly_premium = annual_premium / 12
+        
+        # InsurancePlanに変換
+        insurance_plan = InsurancePlan(
+            monthly_premium=monthly_premium,
+            annual_rate=return_rate * 100,  # パーセント形式
+            investment_period=years,
+            fee_rate=0.013,
+            balance_fee_rate=0.00008,
+            withdrawal_fee_rate=0.1 - (years * 0.01) if years < 10 else 0.0  # 解約控除率
+        )
+        
+        # InsuranceCalculatorで計算
+        calculator = InsuranceCalculator()
+        result = calculator.calculate_simple_value(insurance_plan, taxable_income=0)  # 税金計算なし
+        
+        # 初期保険料の複利運用を追加
+        initial_growth = initial_premium * ((1 + return_rate) ** years)
+        
+        # 総解約返戻金
         total_premiums = initial_premium + (annual_premium * years)
+        surrender_value = result.gross_value + initial_growth
         
-        # 解約返戻金の計算（簡易的な複利計算）
-        surrender_value = 0
-        
-        # 初期保険料の運用
-        surrender_value += initial_premium * ((1 + return_rate) ** years)
-        
-        # 年間保険料の運用（年金終価計算）
-        for year in range(1, years + 1):
-            remaining_years = years - year + 1
-            surrender_value += annual_premium * ((1 + return_rate) ** remaining_years)
-        
-        # 解約控除を考慮（経過年数により減少、10年で解約控除なし）
+        # 解約控除
         surrender_deduction_rate = max(0, 0.1 - (years * 0.01))
         surrender_value *= (1 - surrender_deduction_rate)
         
@@ -78,6 +95,8 @@ class WithdrawalOptimizer:
         """
         総合的な利益を計算（節税効果 + 解約返戻金）
         
+        Phase 2で統合されたInsuranceCalculatorを使用。
+        
         Args:
             annual_premium: 年間保険料
             taxable_income: 課税所得
@@ -89,18 +108,31 @@ class WithdrawalOptimizer:
             総合利益の詳細
         """
         policy_years = withdrawal_year - policy_start_year
+        monthly_premium = annual_premium / 12
         
-        # 節税効果の累計計算
-        deduction_amount = self.deduction_calc.calculate_old_deduction(annual_premium)
-        annual_savings = self.tax_calc.calculate_tax_savings(deduction_amount, taxable_income)
-        total_tax_savings = annual_savings["合計節税額"] * policy_years
+        # InsurancePlanに変換
+        insurance_plan = InsurancePlan(
+            monthly_premium=monthly_premium,
+            annual_rate=return_rate * 100,
+            investment_period=policy_years,
+            fee_rate=0.013,
+            balance_fee_rate=0.00008,
+            withdrawal_fee_rate=max(0, 0.1 - (policy_years * 0.01))  # 解約控除率
+        )
         
-        # 解約返戻金計算
-        policy_value = self.calculate_policy_value(annual_premium, annual_premium, policy_years, return_rate)
+        # InsuranceCalculatorで計算（節税効果含む）
+        calculator = InsuranceCalculator()
+        result = calculator.calculate_total_benefit(insurance_plan, taxable_income=taxable_income)
+        
+        # 解約返戻金（解約控除適用後）
+        surrender_value = result.net_value
+        
+        # 解約利益
+        total_paid = annual_premium * policy_years
+        profit = surrender_value - total_paid
         
         # 解約所得税の計算（一時所得）
-        profit = policy_value["利益"]
-        taxable_profit = max(0, profit - 500000) / 2  # 一時所得の計算（50万円控除、1/2課税）
+        taxable_profit = max(0, profit - 500000) / 2  # 50万円控除、1/2課税
         
         withdrawal_tax = 0
         if taxable_profit > 0:
@@ -108,20 +140,20 @@ class WithdrawalOptimizer:
             original_tax_info = self.tax_calc.calculate_income_tax(taxable_income)
             withdrawal_tax = withdrawal_tax_info["合計所得税"] - original_tax_info["合計所得税"]
         
-        net_benefit = total_tax_savings + policy_value["解約返戻金"] - (annual_premium * policy_years) - withdrawal_tax
+        net_benefit = result.tax_benefit + surrender_value - total_paid - withdrawal_tax
         
         return {
             "引き出し年": withdrawal_year,
             "保険期間": policy_years,
             "年間保険料": annual_premium,
-            "払込保険料合計": annual_premium * policy_years,
-            "累計節税効果": total_tax_savings,
-            "解約返戻金": policy_value["解約返戻金"],
+            "払込保険料合計": total_paid,
+            "累計節税効果": result.tax_benefit,
+            "解約返戻金": surrender_value,
             "解約利益": profit,
             "一時所得課税対象": taxable_profit,
             "解約時所得税": withdrawal_tax,
             "純利益": net_benefit,
-            "実質利回り": ((net_benefit + annual_premium * policy_years) / (annual_premium * policy_years)) ** (1/policy_years) - 1 if policy_years > 0 else 0
+            "実質利回り": ((net_benefit + total_paid) / total_paid) ** (1/policy_years) - 1 if policy_years > 0 else 0
         }
     
     def optimize_withdrawal_timing(
@@ -323,6 +355,8 @@ class WithdrawalOptimizer:
         """
         部分解約戦略の純利益を計算
         
+        Phase 2で統合されたInsuranceCalculatorを使用。
+        
         解約後の資金運用シナリオ:
         - 部分解約した資金は withdrawal_reinvest_rate で再投資される
         - デフォルト1%: 普通預金・定期預金を想定
@@ -332,37 +366,40 @@ class WithdrawalOptimizer:
         Args:
             withdrawal_reinvest_rate: 解約後の資金の再投資利回り
         """
+        monthly_premium = annual_premium / 12
+        
+        # InsurancePlanに変換
+        insurance_plan = InsurancePlan(
+            monthly_premium=monthly_premium,
+            annual_rate=return_rate * 100,
+            investment_period=max_years,
+            fee_rate=0.013,
+            balance_fee_rate=0.00008,
+            withdrawal_fee_rate=0.01
+        )
+        
+        # FundPlanに変換（解約後の再投資）
+        fund_plan = FundPlan(
+            annual_return=withdrawal_reinvest_rate * 100,
+            annual_fee=0.0,  # 預金想定なので手数料なし
+            capital_gains_tax_rate=0.20315,
+            reinvestment_rate=1.0,  # 全額再投資
+            use_nisa=False
+        )
+        
+        # InsuranceCalculatorで計算
+        calculator = InsuranceCalculator()
+        result = calculator.calculate_partial_withdrawal_value(
+            insurance_plan=insurance_plan,
+            withdrawal_interval_years=interval,
+            withdrawal_ratio=withdrawal_rate,
+            fund_plan=fund_plan,
+            taxable_income=taxable_income
+        )
+        
+        # 純利益 = 総資産価値 + 節税効果 - 払込保険料
         total_paid = annual_premium * max_years
-        total_tax_savings = 0
-        withdrawn_funds = 0  # 解約済み資金の累積額（運用後）
-        remaining_balance = 0
-        
-        # 年次シミュレーション
-        for year in range(1, max_years + 1):
-            # 節税効果
-            deduction = self.deduction_calc.calculate_old_deduction(annual_premium)
-            annual_savings = self.tax_calc.calculate_tax_savings(deduction, taxable_income)
-            total_tax_savings += annual_savings["合計節税額"]
-            
-            # 既に解約した資金を再投資で運用（複利）
-            if withdrawn_funds > 0:
-                withdrawn_funds *= (1 + withdrawal_reinvest_rate)
-            
-            # 解約返戻金の累積（簡易計算）
-            policy_value = self.calculate_policy_value(0, annual_premium, year, return_rate)
-            remaining_balance = policy_value["解約返戻金"]
-            
-            # 部分解約実行
-            if year % interval == 0:
-                withdrawal_amount = remaining_balance * withdrawal_rate
-                withdrawn_funds += withdrawal_amount  # 解約資金を再投資プールに追加
-                remaining_balance -= withdrawal_amount
-        
-        # 最終残高も回収
-        total_value = withdrawn_funds + remaining_balance
-        
-        # 純利益 = 総資産価値（保険残高 + 再投資資金） + 節税効果 - 払込保険料
-        net_benefit = total_value + total_tax_savings - total_paid
+        net_benefit = result.net_value + result.tax_benefit - total_paid
         
         return net_benefit
     
@@ -376,32 +413,44 @@ class WithdrawalOptimizer:
         max_years: int,
         return_rate: float
     ) -> float:
-        """乗り換え戦略の純利益を計算"""
-        # 乗り換え前の利益
-        before_switch = self.calculate_total_benefit(
-            annual_premium, taxable_income,
-            policy_start_year + switch_year, policy_start_year, return_rate
+        """
+        乗り換え戦略の純利益を計算
+        
+        Phase 2で統合されたInsuranceCalculatorを使用。
+        """
+        monthly_premium = annual_premium / 12
+        
+        # InsurancePlanに変換
+        insurance_plan = InsurancePlan(
+            monthly_premium=monthly_premium,
+            annual_rate=return_rate * 100,
+            investment_period=max_years,
+            fee_rate=0.013,
+            balance_fee_rate=0.00008,
+            withdrawal_fee_rate=switch_fee_rate
         )
         
-        # 乗り換え手数料を差し引き
-        switch_fee = before_switch["解約返戻金"] * switch_fee_rate
-        net_after_switch = before_switch["解約返戻金"] - switch_fee
+        # FundPlanに変換（乗り換え後の運用）
+        fund_plan = FundPlan(
+            annual_return=return_rate * 100,
+            annual_fee=0.0,
+            capital_gains_tax_rate=0.20315,
+            reinvestment_rate=1.0,
+            use_nisa=False
+        )
         
-        # 乗り換え後の運用（残り期間）
-        remaining_years = max_years - switch_year
-        if remaining_years > 0:
-            # 新商品での運用（簡易計算）
-            new_policy_value = net_after_switch * ((1 + return_rate) ** remaining_years)
-            
-            # 乗り換え後の節税効果
-            deduction = self.deduction_calc.calculate_old_deduction(annual_premium)
-            annual_savings = self.tax_calc.calculate_tax_savings(deduction, taxable_income)
-            additional_tax_savings = annual_savings["合計節税額"] * remaining_years
-            
-            total_benefit = (before_switch["累計節税効果"] + additional_tax_savings + 
-                           new_policy_value - (annual_premium * max_years))
-        else:
-            total_benefit = before_switch["純利益"] - switch_fee
+        # InsuranceCalculatorで計算
+        calculator = InsuranceCalculator()
+        result = calculator.calculate_switching_value(
+            insurance_plan=insurance_plan,
+            switch_year=switch_year,
+            fund_plan=fund_plan,
+            taxable_income=taxable_income
+        )
+        
+        # 純利益 = 総資産価値 + 節税効果 - 払込保険料
+        total_paid = annual_premium * max_years
+        total_benefit = result.net_value + result.tax_benefit - total_paid
         
         return total_benefit
     
