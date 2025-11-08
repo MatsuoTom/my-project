@@ -38,12 +38,38 @@ jobs:
         pip install pytest pytest-cov
         pip install pandas numpy matplotlib plotly seaborn openpyxl yfinance streamlit
     
-    - name: Run tests
+    - name: Run tests with coverage
       run: |
-        python -m pytest common/tests/ tests/test_pension_calculator_integration.py life_insurance/tests/ --tb=short -v
+        python -m pytest common/tests/ tests/test_pension_calculator_integration.py life_insurance/tests/ \
+          --cov=common --cov=life_insurance --cov=pension_calc \
+          --cov-report=term-missing \
+          --cov-report=html \
+          --cov-report=xml \
+          --tb=short -v
     
-    - name: Test summary
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v4
+      if: always()
+      with:
+        files: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    
+    - name: Coverage summary
       if: always()
       run: |
         echo "## Test Results" >> $GITHUB_STEP_SUMMARY
-        echo "Tests completed. Check the logs for details." >> $GITHUB_STEP_SUMMARY
+        echo "Tests completed with coverage analysis." >> $GITHUB_STEP_SUMMARY
+        if [ -f coverage.xml ]; then
+          echo "Coverage report generated successfully." >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Upload coverage HTML report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report
+        path: htmlcov/
