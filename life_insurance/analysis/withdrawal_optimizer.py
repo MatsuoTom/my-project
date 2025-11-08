@@ -306,7 +306,7 @@ class WithdrawalOptimizer:
                         "戦略名": strategy_name,
                         "間隔(年)": interval,
                         "解約割合": f"{rate*100:.0f}%",
-                        "純利益(円)": net_benefit,
+                        "純利益(円)": float(net_benefit),  # 明示的にfloatに変換
                         "パラメータ": f"間隔{interval}年/割合{rate*100:.0f}%",
                     }
                 )
@@ -327,7 +327,7 @@ class WithdrawalOptimizer:
                     "戦略名": strategy_name,
                     "間隔(年)": year,
                     "解約割合": "100%",
-                    "純利益(円)": result["純利益"],
+                    "純利益(円)": float(result["純利益"]),  # 明示的にfloatに変換
                     "パラメータ": f"{year}年後",
                 }
             )
@@ -351,13 +351,17 @@ class WithdrawalOptimizer:
                         "戦略名": strategy_name,
                         "間隔(年)": switch_year,
                         "解約割合": "100%",
-                        "純利益(円)": net_benefit,
+                        "純利益(円)": float(net_benefit),  # 明示的にfloatに変換
                         "パラメータ": f"{switch_year}年後/手数料{switch_rate*100:.0f}%",
                     }
                 )
 
         # DataFrameに変換してランキング化
         df = pd.DataFrame(all_strategies)
+        
+        # 明示的に数値型に変換して_NoValueType問題を回避
+        df["純利益(円)"] = pd.to_numeric(df["純利益(円)"], errors='coerce')
+        
         df = df.sort_values("純利益(円)", ascending=False).reset_index(drop=True)
         df["ランク"] = df.index + 1
 
