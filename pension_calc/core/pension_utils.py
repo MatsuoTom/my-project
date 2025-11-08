@@ -296,6 +296,11 @@ class PensionCalculator(BaseFinancialCalculator):
             self.records = self.df.to_dict(orient="records")
         else:
             self.records = records
+            # 数値カラムを先に変換（_NoValueType問題を回避）
+            for rec in self.records:
+                for key in ["年度", "年齢", "加入月数", "納付額", "推定年収"]:
+                    if key in rec:
+                        rec[key] = float(rec[key])
             self.df = pd.DataFrame(self.records)
 
     def calculate(self, retirement_age: int = 65) -> Dict:
@@ -343,8 +348,9 @@ class PensionCalculator(BaseFinancialCalculator):
         Returns:
             計算結果の辞書
         """
-        total_contribution = self.df["納付額"].sum()
-        total_months = self.df["加入月数"].sum()
+        # 既にfloat型に変換済みなので直接集計（min_count=0で _NoValueType を回避）
+        total_contribution = self.df["納付額"].sum(min_count=0)
+        total_months = self.df["加入月数"].sum(min_count=0)
         average_income = self.df["推定年収"].mean()
 
         # 簡易的な年金受給額計算
