@@ -121,11 +121,13 @@ class WithdrawalOptimizer:
         result = calculator.calculate_total_benefit(insurance_plan, taxable_income=taxable_income)
 
         # 解約返戻金（解約控除適用後）
-        surrender_value = result.net_value
+        # calculate_total_benefit() は辞書を返すため、辞書形式でアクセス
+        net_benefit_value = result['net_benefit']
+        tax_benefit_value = result['tax_benefit']
 
         # 解約利益
         total_paid = annual_premium * policy_years
-        profit = surrender_value - total_paid
+        profit = net_benefit_value - tax_benefit_value
 
         # 解約所得税の計算（一時所得）
         taxable_profit = max(0, profit - 500000) / 2  # 50万円控除、1/2課税
@@ -138,15 +140,15 @@ class WithdrawalOptimizer:
             original_tax_info = self.tax_calc.calculate_income_tax(taxable_income)
             withdrawal_tax = withdrawal_tax_info["合計所得税"] - original_tax_info["合計所得税"]
 
-        net_benefit = result.tax_benefit + surrender_value - total_paid - withdrawal_tax
+        net_benefit = tax_benefit_value + net_benefit_value - withdrawal_tax
 
         return {
             "引き出し年": withdrawal_year,
             "保険期間": policy_years,
             "年間保険料": annual_premium,
             "払込保険料合計": total_paid,
-            "累計節税効果": result.tax_benefit,
-            "解約返戻金": surrender_value,
+            "累計節税効果": tax_benefit_value,
+            "解約返戻金": net_benefit_value,
             "解約利益": profit,
             "一時所得課税対象": taxable_profit,
             "解約時所得税": withdrawal_tax,
@@ -407,18 +409,17 @@ class WithdrawalOptimizer:
         fund_plan = FundPlan(
             annual_return=withdrawal_reinvest_rate * 100,
             annual_fee=0.0,  # 預金想定なので手数料なし
-            capital_gains_tax_rate=0.20315,
-            reinvestment_rate=1.0,  # 全額再投資
+            tax_rate=0.20315,  # 正しいパラメータ名は tax_rate
             use_nisa=False,
         )
 
         # InsuranceCalculatorで計算
         calculator = InsuranceCalculator()
         result = calculator.calculate_partial_withdrawal_value(
-            insurance_plan=insurance_plan,
-            withdrawal_interval_years=interval,
+            plan=insurance_plan,  # 正しいパラメータ名は plan
             withdrawal_ratio=withdrawal_rate,
-            fund_plan=fund_plan,
+            withdrawal_interval=interval,
+            reinvestment_plan=fund_plan,
             taxable_income=taxable_income,
         )
 
@@ -455,20 +456,19 @@ class WithdrawalOptimizer:
             withdrawal_fee_rate=switch_fee_rate,
         )
 
-        # FundPlanに変換（乗り換え後の運用）
+        # FundPlanに変換（乗り換え後の投資）
         fund_plan = FundPlan(
             annual_return=return_rate * 100,
             annual_fee=0.0,
-            capital_gains_tax_rate=0.20315,
-            reinvestment_rate=1.0,
+            tax_rate=0.20315,  # 正しいパラメータ名は tax_rate
             use_nisa=False,
         )
 
         # InsuranceCalculatorで計算
         calculator = InsuranceCalculator()
         result = calculator.calculate_switching_value(
-            insurance_plan=insurance_plan,
-            switch_year=switch_year,
+            plan=insurance_plan,  # 正しいパラメータ名は plan
+            switching_year=switch_year,
             fund_plan=fund_plan,
             taxable_income=taxable_income,
         )
