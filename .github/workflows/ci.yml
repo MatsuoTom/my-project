@@ -9,11 +9,14 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
     
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.12']
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.11', '3.12']
     
     steps:
     - name: Checkout code
@@ -27,9 +30,12 @@ jobs:
     - name: Cache pip packages
       uses: actions/cache@v4
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+        path: |
+          ~/.cache/pip
+          ~\AppData\Local\pip\Cache
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
         restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
           ${{ runner.os }}-pip-
     
     - name: Install dependencies
@@ -40,12 +46,7 @@ jobs:
     
     - name: Run tests with coverage
       run: |
-        python -m pytest common/tests/ tests/test_pension_calculator_integration.py life_insurance/tests/ \
-          --cov=common --cov=life_insurance --cov=pension_calc \
-          --cov-report=term-missing \
-          --cov-report=html \
-          --cov-report=xml \
-          --tb=short -v
+        python -m pytest common/tests/ tests/test_pension_calculator_integration.py life_insurance/tests/ --cov=common --cov=life_insurance --cov=pension_calc --cov-report=term-missing --cov-report=html --cov-report=xml --tb=short -v
     
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4
@@ -60,16 +61,18 @@ jobs:
     
     - name: Coverage summary
       if: always()
+      shell: bash
       run: |
-        echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "## Test Results (${{ matrix.os }}, Python ${{ matrix.python-version }})" >> $GITHUB_STEP_SUMMARY
         echo "Tests completed with coverage analysis." >> $GITHUB_STEP_SUMMARY
         if [ -f coverage.xml ]; then
-          echo "Coverage report generated successfully." >> $GITHUB_STEP_SUMMARY
+          echo "✅ Coverage report generated successfully." >> $GITHUB_STEP_SUMMARY
         fi
     
     - name: Upload coverage HTML report
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: coverage-report
+        name: coverage-report-${{ matrix.os }}-py${{ matrix.python-version }}
         path: htmlcov/
+        retention-days: 7
