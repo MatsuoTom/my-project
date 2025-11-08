@@ -8,6 +8,52 @@ on:
   workflow_dispatch:  # 手動実行を許可
 
 jobs:
+  lint:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-lint-${{ hashFiles('pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-lint-
+    
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black mypy
+    
+    - name: Run flake8
+      run: |
+        flake8 common/ life_insurance/ pension_calc/ --count --show-source --statistics || echo "⚠️ Flake8 found issues"
+    
+    - name: Check code formatting with black
+      run: |
+        black --check --diff common/ life_insurance/ pension_calc/ || echo "⚠️ Black found formatting issues"
+    
+    - name: Run mypy (optional)
+      continue-on-error: true
+      run: |
+        mypy common/ life_insurance/ pension_calc/ --install-types --non-interactive || echo "⚠️ Mypy found type issues"
+    
+    - name: Lint summary
+      if: always()
+      run: |
+        echo "## Code Quality Check Results" >> $GITHUB_STEP_SUMMARY
+        echo "Linting completed. Check the logs for details." >> $GITHUB_STEP_SUMMARY
+  
+  test:
   test:
     name: Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
