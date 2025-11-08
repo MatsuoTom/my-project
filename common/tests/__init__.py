@@ -12,7 +12,7 @@ Test Modules:
 Usage:
     # すべてのテストを実行
     pytest common/tests/ -v
-    
+
     # 特定のテストモジュールを実行
     pytest common/tests/test_base_calculator.py -v
 """

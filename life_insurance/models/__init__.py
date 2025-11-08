@@ -9,7 +9,7 @@ from .fund_plan import FundPlan
 from .calculation_result import InsuranceResult
 
 __all__ = [
-    'InsurancePlan',
-    'FundPlan',
-    'InsuranceResult',
+    "InsurancePlan",
+    "FundPlan",
+    "InsuranceResult",
 ]

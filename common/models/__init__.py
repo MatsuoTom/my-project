@@ -8,7 +8,7 @@ Classes:
 
 Example:
     >>> from common.models.financial_plan import FinancialPlan
-    >>> 
+    >>>
     >>> plan = FinancialPlan(
     ...     name="定期保険",
     ...     start_age=30,
@@ -23,9 +23,11 @@ __all__ = [
     "FinancialPlan",
 ]
 
+
 # 遅延インポート（循環依存回避）
 def __getattr__(name: str):
     if name == "FinancialPlan":
         from .financial_plan import FinancialPlan
+
         return FinancialPlan
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

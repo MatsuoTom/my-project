@@ -12,9 +12,9 @@ from life_insurance.utils.tax_helpers import (
 )
 
 __all__ = [
-    'TaxDeductionHelper',
-    'get_tax_helper',
-    'reset_tax_helper',
+    "TaxDeductionHelper",
+    "get_tax_helper",
+    "reset_tax_helper",
 ]
 
-__version__ = '1.0.0'
+__version__ = "1.0.0"
