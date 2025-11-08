@@ -48,8 +48,8 @@ htmlcov/
 Thumbs.db
 *.log
 
-# Streamlit
-.streamlit/
+# Streamlit (secrets only)
+.streamlit/secrets.toml
 
 # mypy
 .mypy_cache/

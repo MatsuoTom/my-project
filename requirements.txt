@@ -1,0 +1,15 @@
+# Requirements for my-project
+# Generated from pyproject.toml for Streamlit Cloud deployment
+
+# Core dependencies
+streamlit>=1.50.0
+pandas>=2.3.2
+numpy>=2.3.3
+matplotlib>=3.10.6
+plotly>=6.3.0
+seaborn>=0.13.2
+openpyxl>=3.1.5
+yfinance>=0.2.66
+
+# Optional dependencies for development
+# notebook>=7.4.7  # Not needed for deployment

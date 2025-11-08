@@ -109,6 +109,31 @@ streamlit run pension_calc/ui/streamlit_app.py --server.port=8502
 # 実装予定
 ```
 
+## 🌐 Streamlit Cloud デプロイ（オプション）
+
+### デプロイ可能なアプリ
+
+このプロジェクトのStreamlitアプリは、Streamlit Cloudに無料でデプロイできます：
+
+1. **生命保険分析ツール**: `life_insurance/ui/streamlit_app.py`
+2. **年金シミュレーター**: `pension_calc/ui/streamlit_app.py`
+3. **投資シミュレーター**: `investment_simulation/ui/streamlit_app.py`（開発中）
+
+### クイックデプロイ
+
+1. [Streamlit Cloud](https://streamlit.io/cloud) にサインアップ
+2. GitHubリポジトリと連携
+3. 各アプリのメインファイルパスを指定してデプロイ
+
+詳細な手順は [`REFACTORING/PHASE_5/STREAMLIT_DEPLOY_GUIDE.md`](REFACTORING/PHASE_5/STREAMLIT_DEPLOY_GUIDE.md) を参照してください。
+
+### デプロイ済みURL（例）
+
+デプロイ後、以下のようなURLが利用可能になります：
+
+- **生命保険分析**: `https://my-project-life-insurance.streamlit.app`（デプロイ後に設定）
+- **年金シミュレーター**: `https://my-project-pension.streamlit.app`（デプロイ後に設定）
+
 ## 📊 主な機能
 
 ### 生命保険分析ツール
