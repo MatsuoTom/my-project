@@ -209,14 +209,16 @@ class ScenarioAnalyzer:
 
         for metric in key_metrics:
             if metric in df_results.columns:
+                # 明示的に数値型に変換して_NoValueType問題を回避
+                series = pd.to_numeric(df_results[metric], errors='coerce')
                 summary_stats[metric] = {
-                    "平均": df_results[metric].mean(),
-                    "中央値": df_results[metric].median(),
-                    "標準偏差": df_results[metric].std(),
-                    "最小値": df_results[metric].min(),
-                    "最大値": df_results[metric].max(),
-                    "5%パーセンタイル": df_results[metric].quantile(0.05),
-                    "95%パーセンタイル": df_results[metric].quantile(0.95),
+                    "平均": float(series.mean()),
+                    "中央値": float(series.median()),
+                    "標準偏差": float(series.std()),
+                    "最小値": float(series.min()),
+                    "最大値": float(series.max()),
+                    "5%パーセンタイル": float(series.quantile(0.05)),
+                    "95%パーセンタイル": float(series.quantile(0.95)),
                 }
 
         return df_results, summary_stats
@@ -290,10 +292,14 @@ class ScenarioAnalyzer:
         # リスク分析
         risk_metrics = {}
         if monte_carlo_results is not None:
+            # 明示的に数値型に変換して_NoValueType問題を回避
+            net_profit_series = pd.to_numeric(monte_carlo_results["純利益"], errors='coerce')
+            return_rate_series = pd.to_numeric(monte_carlo_results["実質利回り"], errors='coerce')
+            
             risk_metrics = {
-                "純利益_負の確率": (monte_carlo_results["純利益"] < 0).mean(),
-                "純利益_VaR_5%": monte_carlo_results["純利益"].quantile(0.05),
-                "実質利回り_負の確率": (monte_carlo_results["実質利回り"] < 0).mean(),
+                "純利益_負の確率": float((net_profit_series < 0).mean()),
+                "純利益_VaR_5%": float(net_profit_series.quantile(0.05)),
+                "実質利回り_負の確率": float((return_rate_series < 0).mean()),
             }
 
         # 感度が高いパラメータの特定
@@ -334,9 +340,12 @@ class ScenarioAnalyzer:
         recommendations = []
 
         # 基本推奨
-        if best_scenario["純利益"] > 0:
-            recommendations.append(f"最適保険期間は{best_scenario['保険期間']:.0f}年です。")
-            recommendations.append(f"期待純利益は{best_scenario['純利益']:,.0f}円です。")
+        net_profit = best_scenario.get("純利益", 0)
+        if net_profit > 0:
+            # 保険期間が存在する場合のみ表示
+            if "保険期間" in best_scenario.index:
+                recommendations.append(f"最適保険期間は{best_scenario['保険期間']:.0f}年です。")
+            recommendations.append(f"期待純利益は{net_profit:,.0f}円です。")
         else:
             recommendations.append("現在の条件では生命保険料控除による利益が期待できません。")
 

@@ -13,6 +13,8 @@ life_insurance.analysis.scenario_analyzerのユニットテスト
 import pytest
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Tcl/Tk問題を回避するため、非GUIバックエンドを使用
 import matplotlib.pyplot as plt
 from typing import Dict, List, Any
 
@@ -317,12 +319,8 @@ class TestAnalyzeSensitivity:
 
 
 class TestCreateMonteCarloSimulation:
-    """create_monte_carlo_simulation()のテスト
-    
-    注: pandas/numpy型システムの問題により一部テストをスキップ
-    """
+    """create_monte_carlo_simulation()のテスト"""
 
-    @pytest.mark.skip(reason="pandas/numpy型システムの_NoValueType問題")
     def test_basic_monte_carlo(self):
         """正常系: 基本的なモンテカルロシミュレーション"""
         # Arrange
@@ -348,7 +346,6 @@ class TestCreateMonteCarloSimulation:
         assert "生成_return_rate" in result_df.columns
         assert isinstance(summary_stats, dict)
 
-    @pytest.mark.skip(reason="pandas/numpy型システムの_NoValueType問題")
     def test_monte_carlo_summary_statistics(self):
         """正常系: サマリー統計の確認"""
         # Arrange
@@ -377,7 +374,6 @@ class TestCreateMonteCarloSimulation:
         assert "5%パーセンタイル" in summary_stats["純利益"]
         assert "95%パーセンタイル" in summary_stats["純利益"]
 
-    @pytest.mark.skip(reason="pandas/numpy型システムの_NoValueType問題")
     def test_monte_carlo_with_multiple_uncertainty_params(self):
         """正常系: 複数の不確実性パラメータ"""
         # Arrange
@@ -403,7 +399,6 @@ class TestCreateMonteCarloSimulation:
         assert "生成_return_rate" in result_df.columns
         assert "生成_taxable_income" in result_df.columns
 
-    @pytest.mark.skip(reason="pandas/numpy型システムの_NoValueType問題")
     def test_monte_carlo_reproducibility(self):
         """検証: 再現性の確認（seed固定）"""
         # Arrange
@@ -434,12 +429,8 @@ class TestCreateMonteCarloSimulation:
 
 
 class TestPlotScenarioComparison:
-    """plot_scenario_comparison()のテスト
-    
-    注: matplotlib/Tcl/Tk環境問題によりテストをスキップ
-    """
+    """plot_scenario_comparison()のテスト"""
 
-    @pytest.mark.skip(reason="matplotlib Tcl/Tk環境設定問題")
     def test_basic_plot_creation(self):
         """正常系: 基本的なプロット作成"""
         # Arrange
@@ -461,7 +452,6 @@ class TestPlotScenarioComparison:
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
-    @pytest.mark.skip(reason="matplotlib Tcl/Tk環境設定問題")
     def test_plot_with_multiple_metrics(self):
         """正常系: 複数指標のプロット"""
         # Arrange
@@ -485,7 +475,6 @@ class TestPlotScenarioComparison:
         assert len(fig.axes) == 2  # 2つのサブプロット
         plt.close(fig)
 
-    @pytest.mark.skip(reason="matplotlib Tcl/Tk環境設定問題")
     def test_plot_with_grouping(self):
         """正常系: グループ分けありのプロット"""
         # Arrange
@@ -509,12 +498,8 @@ class TestPlotScenarioComparison:
 
 
 class TestGenerateRecommendationReport:
-    """generate_recommendation_report()のテスト
-    
-    注: 一部テストをスキップ（内部実装依存のKeyError）
-    """
+    """generate_recommendation_report()のテスト"""
 
-    @pytest.mark.skip(reason="内部実装依存のKeyError（'保険期間'）")
     def test_basic_recommendation_report(self):
         """正常系: 基本的な推奨レポート生成"""
         # Arrange
@@ -535,7 +520,6 @@ class TestGenerateRecommendationReport:
         assert isinstance(report, dict)
         # レポートには最適シナリオなどの情報が含まれる
 
-    @pytest.mark.skip(reason="pandas/numpy型システムの_NoValueType問題")
     def test_recommendation_report_with_monte_carlo(self):
         """正常系: モンテカルロ結果を含む推奨レポート"""
         # Arrange
@@ -598,7 +582,6 @@ class TestScenarioAnalyzerIntegration:
         assert len(scenario_results) == 4
         assert len(sensitivity_results) == 4
 
-    @pytest.mark.skip(reason="pandas/numpy型システムの_NoValueType問題")
     def test_full_analysis_workflow(self):
         """統合: 完全な分析ワークフロー"""
         # Arrange
