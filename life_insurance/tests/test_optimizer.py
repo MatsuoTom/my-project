@@ -73,7 +73,6 @@ class TestWithdrawalOptimizer:
         assert len(result) == 3  # 基準 + 2シナリオ
         assert "シナリオ" in result.columns
 
-    @pytest.mark.skip(reason="pandas/numpy型問題の調査中")
     def test_analyze_all_strategies(self, optimizer):
         """全戦略分析のテスト"""
         result = optimizer.analyze_all_strategies(
@@ -326,7 +325,6 @@ class TestAnalyzeAllStrategiesDetailed:
     def optimizer(self):
         return WithdrawalOptimizer()
 
-    @pytest.mark.skip(reason="pandas/numpy型問題の調査中（Phase 7.2.1で解決予定）")
     def test_analyze_all_strategies_comprehensive(self, optimizer):
         """全戦略の網羅的実行テスト"""
         # Arrange: 各戦略タイプを含む設定
@@ -358,7 +356,6 @@ class TestAnalyzeAllStrategiesDetailed:
         assert any("全解約" in str(s) for s in strategy_types)
         assert any("乗り換え" in str(s) for s in strategy_types)
 
-    @pytest.mark.skip(reason="pandas/numpy型問題の調査中（Phase 7.2.1で解決予定）")
     def test_analyze_all_strategies_ranking(self, optimizer):
         """戦略ランキングの妥当性テスト"""
         # Arrange
@@ -382,7 +379,6 @@ class TestAnalyzeAllStrategiesDetailed:
         profits = result["純利益(円)"].tolist()
         assert profits == sorted(profits, reverse=True)
 
-    @pytest.mark.skip(reason="pandas/numpy型問題の調査中（Phase 7.2.1で解決予定）")
     def test_analyze_all_strategies_minimal(self, optimizer):
         """最小構成での全戦略分析テスト"""
         # Arrange: 最小限のパラメータで実行

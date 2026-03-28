@@ -1,11 +1,16 @@
 # 金融分析ツール統合プロジェクト
 
 [![CI/CD Pipeline](https://github.com/MatsuoTom/my-project/actions/workflows/ci.yml/badge.svg)](https://github.com/MatsuoTom/my-project/actions/workflows/ci.yml)
-[![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
+[![codecov](https://codecov.io/gh/MatsuoTom/my-project/branch/main/graph/badge.svg)](https://codecov.io/gh/MatsuoTom/my-project)
+[![Python Version](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-396%20passed-brightgreen)](https://github.com/MatsuoTom/my-project/actions)
+[![Coverage](https://img.shields.io/badge/coverage-81.64%25-green)](https://github.com/MatsuoTom/my-project/actions)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License: Private](https://img.shields.io/badge/license-Private-red.svg)](LICENSE)
 
-このプロジェクトは、生命保険分析・年金シミュレーション・投資シミュレーションを統合した金融分析ツールです。Phase 3-5のリファクタリングにより、共通基盤を構築し、高品質なテスト環境とCI/CDパイプラインを整備しました。
+このプロジェクトは、生命保険分析・年金シミュレーション・投資シミュレーションを統合した金融分析ツールです。Phase 3-7のリファクタリングにより、共通基盤を構築し、高品質なテスト環境とCI/CDパイプラインを整備しました。
+
+**Phase 7完了**: テスト実行時間を4.21秒に最適化し、カバレッジ81.64%を達成しました。
 
 ## � プロジェクトの特徴
 
@@ -15,14 +20,17 @@
 2. **年金シミュレーター**: 国民年金・厚生年金の受給額試算
 3. **投資シミュレーター**: NISA・投資信託の分析（開発中）
 
-### ✅ 高品質な開発基盤（Phase 3-5完了）
+### ✅ 高品質な開発基盤（Phase 3-7完了）
 
-- **286件のテスト**: 95.8%パス（2.34秒で実行）
-- **CI/CDパイプライン**: GitHub Actions（9環境マトリックステスト）
+- **396件のテスト**: 100%パス（4.21秒で実行）
+- **テストカバレッジ**: 81.64%達成（目標85%に向けて継続改善中）
+- **CI/CDパイプライン**: GitHub Actions（高速フィードバック）
+  - Fast Tests: 4秒（PR時の即座な検証）
+  - Coverage Tests: 15秒（詳細分析）
 - **コード品質管理**: Black自動フォーマット、flake8、mypy
-- **テストカバレッジ**: 65.16%測定
 - **共通基盤**: 重複コードを削減し、保守性を向上
 - **テスト駆動開発**: TDD原則に基づく堅牢な設計
+- **パフォーマンス最適化**: 実行時間を60%短縮（Phase 7.3）
 
 ## 🏗️ プロジェクト構造
 

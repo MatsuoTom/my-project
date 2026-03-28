@@ -36,8 +36,13 @@ def show_menu():
     print("   📊 リスク・リターン分析")
     print("   🔮 将来予測シミュレーション")
     print()
-    print("4️⃣  プロジェクト情報表示")
-    print("5️⃣  終了")
+    print("4️⃣  車両維持費年間計画システム")
+    print("   🚗 年間維持費の計画管理")
+    print("   📝 実績入力と計画比較")
+    print("   📈 長期コストシミュレーション")
+    print()
+    print("5️⃣  プロジェクト情報表示")
+    print("6️⃣  終了")
     print()
 
 def launch_life_insurance():
@@ -178,6 +183,52 @@ def launch_investment():
         print(f"❌ エラーが発生しました: {e}")
         return False
 
+def launch_vehicle_finance():
+    """車両維持費年間計画システムの起動"""
+    print("\n🚗 車両維持費年間計画システムを起動します")
+    print("=" * 50)
+    
+    app_path = Path(__file__).parent / "vehicle_finance" / "ui" / "streamlit_app.py"
+    
+    if not app_path.exists():
+        print(f"❌ エラー: アプリファイルが見つかりません: {app_path}")
+        return False
+    
+    try:
+        project_root = Path(__file__).parent
+        env = os.environ.copy()
+        # このプロジェクトを最優先で import させる
+        env["PYTHONPATH"] = str(project_root)
+        cmd = [
+            sys.executable, 
+            "-m", 
+            "streamlit", 
+            "run", 
+            str(app_path),
+            "--server.port=8509",
+            "--server.address=localhost", 
+            "--browser.gatherUsageStats=false"
+        ]
+        
+        print("💡 ブラウザでアプリケーションが開きます")
+        print("   URL: http://localhost:8509")
+        print("⏹️  停止するには Ctrl+C を押してください")
+        print("=" * 50)
+        
+        subprocess.run(cmd, env=env, cwd=str(project_root))
+        return True
+        
+    except KeyboardInterrupt:
+        print("\n👋 車両維持費年間計画システムを停止しました")
+        return True
+    except FileNotFoundError:
+        print("❌ エラー: Streamlitがインストールされていません")
+        print("   インストール方法: pip install streamlit")
+        return False
+    except Exception as e:
+        print(f"❌ エラーが発生しました: {e}")
+        return False
+
 def show_project_info():
     """プロジェクト情報を表示"""
     print("📋 プロジェクト情報")
@@ -200,13 +251,19 @@ def show_project_info():
     print("│   ├── analysis/            # 分析ロジック")
     print("│   ├── ui/                  # Streamlit UI")
     print("│   └── data/                # データ")
+    print("├── vehicle_finance/         # 車両維持費年間計画")
+    print("│   ├── core/                # コア計算機能")
+    print("│   ├── data/                # データモデル")
+    print("│   ├── ui/                  # Streamlit UI")
+    print("│   └── tests/               # テスト")
     print("├── main.py                  # 統合ランチャー")
     print("└── README.md                # プロジェクト説明")
     print()
     print("🛠️  個別起動コマンド:")
-    print("生命保険: python scripts/run_life_insurance_app.py")
-    print("年金:     python scripts/run_pension_app.py")
-    print("投資:     python scripts/run_investment_app.py")
+    print("生命保険: python run_life_insurance_app.py")
+    print("年金:     python run_pension_app.py")
+    print("投資:     python run_investment_app.py")
+    print("車両:     python run_vehicle_app.py")
     print()
     print("📦 必要パッケージ:")
     print("streamlit, pandas, plotly, numpy, matplotlib")
@@ -219,7 +276,7 @@ def main():
         show_menu()
         
         try:
-            choice = input("選択してください (1-5): ").strip()
+            choice = input("選択してください (1-6): ").strip()
             print()
             
             if choice == "1":
@@ -235,15 +292,19 @@ def main():
                     input("\nEnterキーを押して続行...")
                 
             elif choice == "4":
-                show_project_info()
-                input("\nEnterキーを押して続行...")
+                if not launch_vehicle_finance():
+                    input("\nEnterキーを押して続行...")
                 
             elif choice == "5":
+                show_project_info()
+                input("\nEnterキーを押して続行...")
+                # 実行コマンド（PowerShell）: & .venv/Scripts/python.exe main.py
+            elif choice == "6":
                 print("👋 金融分析ツールを終了します")
                 break
                 
             else:
-                print("❌ 無効な選択です。1-5の数字を入力してください。")
+                print("❌ 無効な選択です。1-6の数字を入力してください。")
                 input("\nEnterキーを押して続行...")
         
         except KeyboardInterrupt:

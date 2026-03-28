@@ -154,7 +154,7 @@ def show_mutual_fund_comparison():
 
     # サブタブで4つの分析を提供
     tab1, tab2, tab3, tab4 = st.tabs(
-        ["🏦 生命保険設定", "📈 投資信託を分析", "⚖️ 生命保険との比較", "⏰ 最適解約タイミング分析"]
+        ["🏦 生命保険設定", "📈 投資信託を分析", "⚖️ 基本比較", "🔄 乗り換え戦略分析"]
     )
 
     with tab1:
@@ -166,11 +166,13 @@ def show_mutual_fund_comparison():
         _show_mutual_fund_analysis()
 
     with tab3:
-        st.markdown("### 生命保険との比較")
+        st.markdown("### 基本比較：生命保険 vs 投資信託")
+        st.markdown("各商品を満期まで継続した場合の詳細比較を行います")
         _show_insurance_comparison()
 
     with tab4:
-        st.markdown("### 最適解約タイミング分析")
+        st.markdown("### 乗り換え戦略分析")
+        st.markdown("生命保険から投資信託への乗り換えタイミングと部分解約戦略を分析します")
         _show_optimal_withdrawal_timing()
 
 
@@ -439,7 +441,7 @@ def show_deduction_calculator():
 def show_withdrawal_optimizer():
     """引き出しタイミング最適化ページ"""
     st.header("🎯 引き出しタイミング最適化")
-    st.markdown("最適な引き出しタイミングを分析し、最大利益を得られる時期を特定します。")
+    st.markdown("最適な引き出しタイミングと所得シナリオ別の効果を分析します")
 
     # パラメータ設定
     col1, col2 = st.columns([1, 1])
@@ -447,293 +449,286 @@ def show_withdrawal_optimizer():
     with col1:
         st.subheader("📋 基本設定")
 
-        monthly_premium_opt = st.number_input(
+        monthly_premium = st.number_input(
             "月払保険料（円）",
             min_value=1000,
-            max_value=20000,
+            max_value=50000,
             value=9000,
             step=1000,
             key="opt_monthly_premium",
         )
 
-        annual_interest_rate_opt = (
+        annual_premium = monthly_premium * 12
+
+        return_rate = (
             st.number_input(
-                "年利（%）",
+                "想定運用利回り（%）",
                 min_value=0.0,
                 max_value=10.0,
-                value=1.25,
-                step=0.01,
-                key="opt_annual_interest_rate",
+                value=2.0,
+                step=0.1,
+                help="保険商品の想定運用利回り",
+                key="opt_return_rate",
             )
             / 100
         )
 
-        max_years = st.slider(
-            "分析期間（年）", min_value=5, max_value=30, value=25, key="opt_max_years"
+        policy_start_year = st.number_input(
+            "保険開始年",
+            min_value=2010,
+            max_value=datetime.now().year,
+            value=2020,
+            step=1,
+            key="opt_policy_start_year",
+        )
+
+        max_years = st.number_input(
+            "最大分析期間（年）",
+            min_value=5,
+            max_value=30,
+            value=20,
+            step=1,
+            help="何年後までの引き出しタイミングを分析するか",
+            key="opt_max_years",
         )
 
     with col2:
         st.subheader("🧮 税務設定")
 
-        annual_income_opt_man = st.number_input(
+        taxable_income_man = st.number_input(
             "課税所得（万円）",
             min_value=100,
-            max_value=5000,
-            value=600,
+            max_value=2000,
+            value=500,
             step=50,
-            key="opt_annual_income_man",
-            help="給与所得控除・基礎控除等を差し引いた後の課税対象所得額",
+            help="各種所得控除を差し引いた後の課税対象所得額",
+            key="opt_taxable_income",
         )
 
-        annual_income_opt = annual_income_opt_man * 10000
-
-        # 将来の税率変動を考慮するかどうか
-        consider_tax_change = st.checkbox(
-            "将来の税率変動を考慮", value=False, key="consider_tax_change"
-        )
-
-        if consider_tax_change:
-            future_income_change = (
-                st.slider(
-                    "将来の所得変動率（%/年）",
-                    min_value=-5.0,
-                    max_value=5.0,
-                    value=0.0,
-                    step=0.1,
-                    key="future_income_change",
-                )
-                / 100
-            )
-        else:
-            future_income_change = 0.0
+        taxable_income = taxable_income_man * 10000
 
     # 最適化実行
-    if st.button("🎯 最適タイミングを分析", key="run_optimization"):
-        st.success("最適化分析を実行中...")
+    st.markdown("---")
+    st.subheader("📊 最適化実行")
 
-        # 年間保険料と税額計算
-        annual_premium_opt = monthly_premium_opt * 12
-        tax_helper = get_tax_helper()
-        tax_result = tax_helper.calculate_annual_tax_savings(annual_premium_opt, taxable_income_opt)
-        deduction_amount = tax_result["deduction"]
+    if st.button("🚀 最適化分析を実行", type="primary", key="run_optimization"):
+        with st.spinner("最適化計算中..."):
+            # WithdrawalOptimizerのインスタンス作成
+            optimizer = WithdrawalOptimizer()
 
-        # 手数料設定
-        monthly_fee_rate = 0.013
-        monthly_balance_fee_rate = 0.00008
-        monthly_interest_rate_opt = annual_interest_rate_opt / 12
-
-        # 各年での引き出し効果を計算
-        years_analysis = list(range(1, max_years + 1))
-        optimization_results = []
-
-        for year in years_analysis:
-            # その年での積立残高と諸計算
-            balance = 0
-            cumulative_premium = 0
-            cumulative_fee = 0
-            cumulative_tax_savings = 0
-
-            for y in range(year):
-                # その年の所得（変動考慮）
-                current_income = annual_income_opt * (1 + future_income_change) ** y
-                income_tax_rate = tax_calculator.get_income_tax_rate(current_income)
-                annual_tax_savings = deduction_amount * (income_tax_rate + 0.10)
-                cumulative_tax_savings += annual_tax_savings
-
-                # 月次計算
-                for month in range(12):
-                    cumulative_premium += monthly_premium_opt
-
-                    monthly_fee = monthly_premium_opt * monthly_fee_rate
-                    balance_fee = balance * monthly_balance_fee_rate
-                    total_monthly_fee = monthly_fee + balance_fee
-                    cumulative_fee += total_monthly_fee
-
-                    net_investment = monthly_premium_opt - total_monthly_fee
-                    balance = balance * (1 + monthly_interest_rate_opt) + net_investment
-
-            # 正味利益計算
-            net_benefit = balance + cumulative_tax_savings - cumulative_premium
-
-            # 実質年利計算
-            if cumulative_premium > 0:
-                effective_annual_return = (
-                    (balance + cumulative_tax_savings) / cumulative_premium
-                ) ** (1 / year) - 1
-            else:
-                effective_annual_return = 0
-
-            optimization_results.append(
-                {
-                    "year": year,
-                    "balance": balance,
-                    "cumulative_premium": cumulative_premium,
-                    "cumulative_tax_savings": cumulative_tax_savings,
-                    "cumulative_fee": cumulative_fee,
-                    "net_benefit": net_benefit,
-                    "effective_return": effective_annual_return,
-                    "total_return": balance + cumulative_tax_savings,
-                }
+            # 最適タイミング分析
+            best_timing, all_results = optimizer.optimize_withdrawal_timing(
+                annual_premium, taxable_income, policy_start_year, max_years, return_rate
             )
 
-        # 最適年を特定
-        best_year_by_benefit = max(optimization_results, key=lambda x: x["net_benefit"])
-        best_year_by_return = max(optimization_results, key=lambda x: x["effective_return"])
+            # 結果を表示
+            st.success("✅ 最適化完了")
 
-        # 結果表示
-        st.markdown("---")
-        st.subheader("🏆 最適化結果")
+            st.markdown("#### 🎯 最適引き出しタイミング")
+            col_a, col_b, col_c = st.columns(3)
 
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.metric(
-                "最大利益年",
-                f"{best_year_by_benefit['year']}年目",
-                f"{best_year_by_benefit['net_benefit']/10000:.1f}万円",
-            )
-
-        with col2:
-            st.metric(
-                "最高利回り年",
-                f"{best_year_by_return['year']}年目",
-                f"{best_year_by_return['effective_return']:.2%}",
-            )
-
-        with col3:
-            # 損益分岐点
-            break_even = next((r for r in optimization_results if r["net_benefit"] > 0), None)
-            if break_even:
+            with col_a:
                 st.metric(
-                    "損益分岐点",
-                    f"{break_even['year']}年目",
-                    f"利益: {break_even['net_benefit']/10000:.1f}万円",
+                    "最適引き出し年",
+                    f"{best_timing['引き出し年']}年",
+                    delta=f"{best_timing['保険期間']}年後",
                 )
-            else:
-                st.metric("損益分岐点", "期間内なし", "⚠️")
 
-        # グラフ表示
-        st.markdown("---")
-        st.subheader("📊 引き出しタイミング分析")
+            with col_b:
+                st.metric("純利益", f"{best_timing['純利益']:,.0f}円")
 
-        # データフレーム作成
-        df_opt = pd.DataFrame(optimization_results)
-        df_opt["balance_man"] = df_opt["balance"] / 10000
-        df_opt["net_benefit_man"] = df_opt["net_benefit"] / 10000
-        df_opt["total_return_man"] = df_opt["total_return"] / 10000
-        df_opt["cumulative_premium_man"] = df_opt["cumulative_premium"] / 10000
+            with col_c:
+                st.metric("実質利回り", f"{best_timing['実質利回り']:.2%}")
 
-        # 2軸グラフ作成
-        fig_opt = make_subplots(
-            rows=2,
-            cols=1,
-            subplot_titles=("正味利益の推移", "実質年利の推移"),
-            specs=[[{"secondary_y": True}], [{"secondary_y": False}]],
-        )
+            # 詳細情報
+            st.markdown("#### 📋 詳細情報")
 
-        # 正味利益
-        fig_opt.add_trace(
-            go.Scatter(
-                x=df_opt["year"],
-                y=df_opt["net_benefit_man"],
-                name="正味利益",
-                line=dict(color="green", width=3),
-            ),
-            row=1,
-            col=1,
-        )
+            detail_cols = st.columns(4)
 
-        # 積立残高（副軸）
-        fig_opt.add_trace(
-            go.Scatter(
-                x=df_opt["year"],
-                y=df_opt["balance_man"],
-                name="積立残高",
-                line=dict(color="blue", dash="dash"),
-            ),
-            row=1,
-            col=1,
-            secondary_y=True,
-        )
+            with detail_cols[0]:
+                st.metric("払込保険料合計", f"{best_timing['払込保険料合計']:,.0f}円")
 
-        # 実質年利
-        fig_opt.add_trace(
-            go.Scatter(
-                x=df_opt["year"],
-                y=df_opt["effective_return"] * 100,
-                name="実質年利",
-                line=dict(color="purple", width=2),
-            ),
-            row=2,
-            col=1,
-        )
+            with detail_cols[1]:
+                st.metric("累計節税効果", f"{best_timing['累計節税効果']:,.0f}円")
 
-        # 最適点をマーク
-        fig_opt.add_vline(
-            x=best_year_by_benefit["year"],
-            line_dash="dot",
-            line_color="red",
-            annotation_text=f"最大利益: {best_year_by_benefit['year']}年",
-            row=1,
-            col=1,
-        )
-        fig_opt.add_vline(
-            x=best_year_by_return["year"],
-            line_dash="dot",
-            line_color="orange",
-            annotation_text=f"最高利回り: {best_year_by_return['year']}年",
-            row=2,
-            col=1,
-        )
+            with detail_cols[2]:
+                st.metric("解約返戻金", f"{best_timing['解約返戻金']:,.0f}円")
 
-        # レイアウト設定
-        fig_opt.update_layout(
-            height=600, title_text="引き出しタイミング最適化分析", showlegend=True
-        )
+            with detail_cols[3]:
+                st.metric("解約時所得税", f"{best_timing['解約時所得税']:,.0f}円")
 
-        fig_opt.update_yaxes(title_text="正味利益（万円）", row=1, col=1)
-        fig_opt.update_yaxes(title_text="積立残高（万円）", row=1, col=1, secondary_y=True)
-        fig_opt.update_yaxes(title_text="実質年利（%）", row=2, col=1)
-        fig_opt.update_xaxes(title_text="年数", row=2, col=1)
+            # グラフ表示
+            st.markdown("---")
+            st.subheader("📈 年次推移分析")
 
-        st.plotly_chart(fig_opt, width="stretch")
+            # データフレームから万円単位に変換
+            df_plot = all_results.copy()
+            df_plot["純利益_万円"] = df_plot["純利益"] / 10000
+            df_plot["解約返戻金_万円"] = df_plot["解約返戻金"] / 10000
+            df_plot["累計節税効果_万円"] = df_plot["累計節税効果"] / 10000
 
-        # 推奨事項
-        st.markdown("---")
-        st.subheader("💡 最適化推奨事項")
-
-        if best_year_by_benefit["net_benefit"] > 0:
-            st.success(
-                f"""
-            ✅ **推奨引き出しタイミング**: {best_year_by_benefit['year']}年目
-            - **最大正味利益**: {best_year_by_benefit['net_benefit']/10000:.1f}万円
-            - **実質年利**: {best_year_by_benefit['effective_return']:.2%}
-            - **総リターン**: {best_year_by_benefit['total_return']/10000:.1f}万円
-            """
-            )
-        else:
-            st.warning("⚠️ 設定条件では利益を得にくい投資となっています。")
-
-        if abs(best_year_by_benefit["year"] - best_year_by_return["year"]) <= 2:
-            st.info("📈 最大利益年と最高利回り年が近接しており、安定した投資となります。")
-        else:
-            st.info(
-                f"""
-            📊 **注意**: 最大利益年（{best_year_by_benefit['year']}年）と最高利回り年（{best_year_by_return['year']}年）が異なります。
-            - 短期重視なら{best_year_by_return['year']}年目
-            - 長期利益重視なら{best_year_by_benefit['year']}年目を検討
-            """
+            # グラフ作成
+            fig = make_subplots(
+                rows=2,
+                cols=1,
+                subplot_titles=("純利益の推移", "実質利回りの推移"),
+                vertical_spacing=0.12,
             )
 
-        # 詳細データ
-        with st.expander("📋 年別詳細データを確認"):
-            display_df = df_opt[
-                ["year", "balance_man", "net_benefit_man", "effective_return"]
-            ].copy()
-            display_df.columns = ["年数", "積立残高(万円)", "正味利益(万円)", "実質年利"]
-            display_df["実質年利"] = (display_df["実質年利"] * 100).round(2)
-            display_df = display_df.round(1)
-            st.dataframe(display_df, width="stretch")
+            # 純利益
+            fig.add_trace(
+                go.Scatter(
+                    x=df_plot["引き出し年"],
+                    y=df_plot["純利益_万円"],
+                    name="純利益",
+                    line=dict(color="green", width=3),
+                    hovertemplate="年: %{x}<br>純利益: %{y:.1f}万円<extra></extra>",
+                ),
+                row=1,
+                col=1,
+            )
+
+            # 最適点をマーク
+            fig.add_trace(
+                go.Scatter(
+                    x=[best_timing["引き出し年"]],
+                    y=[best_timing["純利益"] / 10000],
+                    mode="markers",
+                    name="最適点",
+                    marker=dict(color="red", size=15, symbol="star"),
+                    hovertemplate="最適年: %{x}<br>純利益: %{y:.1f}万円<extra></extra>",
+                ),
+                row=1,
+                col=1,
+            )
+
+            # 実質利回り
+            fig.add_trace(
+                go.Scatter(
+                    x=df_plot["引き出し年"],
+                    y=df_plot["実質利回り"] * 100,
+                    name="実質利回り",
+                    line=dict(color="purple", width=2),
+                    hovertemplate="年: %{x}<br>利回り: %{y:.2f}%<extra></extra>",
+                ),
+                row=2,
+                col=1,
+            )
+
+            fig.update_layout(height=600, showlegend=True, hovermode="x unified")
+            fig.update_xaxes(title_text="引き出し年", row=2, col=1)
+            fig.update_yaxes(title_text="純利益（万円）", row=1, col=1)
+            fig.update_yaxes(title_text="実質利回り（%）", row=2, col=1)
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 詳細データテーブル
+            with st.expander("📋 年別詳細データを確認"):
+                display_df = all_results[
+                    [
+                        "引き出し年",
+                        "保険期間",
+                        "解約返戻金",
+                        "累計節税効果",
+                        "純利益",
+                        "実質利回り",
+                    ]
+                ].copy()
+                display_df["解約返戻金"] = (display_df["解約返戻金"] / 10000).round(1)
+                display_df["累計節税効果"] = (display_df["累計節税効果"] / 10000).round(1)
+                display_df["純利益"] = (display_df["純利益"] / 10000).round(1)
+                display_df["実質利回り"] = (display_df["実質利回り"] * 100).round(2)
+                display_df.columns = [
+                    "引き出し年",
+                    "保険期間",
+                    "解約返戻金(万円)",
+                    "累計節税効果(万円)",
+                    "純利益(万円)",
+                    "実質利回り(%)",
+                ]
+                st.dataframe(display_df, use_container_width=True)
+
+    # 所得シナリオ別比較
+    st.markdown("---")
+    st.subheader("💰 所得シナリオ別比較")
+    st.markdown("異なる所得水準での効果を比較します")
+
+    with st.expander("🔍 シナリオ設定と分析実行"):
+        col_s1, col_s2 = st.columns(2)
+
+        with col_s1:
+            scenario_name_1 = st.text_input("シナリオ1名称", value="低所得", key="scenario_1_name")
+            scenario_income_1 = (
+                st.number_input(
+                    "シナリオ1所得（万円）", min_value=100, max_value=2000, value=300, step=50, key="scenario_1_income"
+                )
+                * 10000
+            )
+
+        with col_s2:
+            scenario_name_2 = st.text_input("シナリオ2名称", value="高所得", key="scenario_2_name")
+            scenario_income_2 = (
+                st.number_input(
+                    "シナリオ2所得（万円）", min_value=100, max_value=2000, value=800, step=50, key="scenario_2_income"
+                )
+                * 10000
+            )
+
+        withdrawal_year_scenario = st.number_input(
+            "比較する引き出し年",
+            min_value=policy_start_year,
+            max_value=policy_start_year + 30,
+            value=policy_start_year + 10,
+            key="scenario_withdrawal_year",
+        )
+
+        if st.button("📊 シナリオ分析を実行", key="run_scenario_analysis"):
+            with st.spinner("シナリオ分析中..."):
+                optimizer = WithdrawalOptimizer()
+
+                income_scenarios = [
+                    (scenario_name_1, scenario_income_1),
+                    (scenario_name_2, scenario_income_2),
+                ]
+
+                scenario_results = optimizer.analyze_income_scenarios(
+                    annual_premium,
+                    taxable_income,
+                    income_scenarios,
+                    policy_start_year,
+                    withdrawal_year_scenario,
+                )
+
+                st.success("✅ シナリオ分析完了")
+
+                # 結果表示
+                st.markdown("#### 📊 シナリオ比較結果")
+
+                # メトリクス表示
+                cols = st.columns(len(scenario_results))
+                for i, (_, row) in enumerate(scenario_results.iterrows()):
+                    with cols[i]:
+                        st.metric(
+                            row["シナリオ"],
+                            f"{row['純利益']:,.0f}円",
+                            delta=f"利回り: {row['実質利回り']:.2%}",
+                        )
+
+                # 詳細テーブル
+                display_scenario = scenario_results.copy()
+                display_scenario["解約返戻金"] = (display_scenario["解約返戻金"] / 10000).round(1)
+                display_scenario["累計節税効果"] = (display_scenario["累計節税効果"] / 10000).round(1)
+                display_scenario["純利益"] = (display_scenario["純利益"] / 10000).round(1)
+                display_scenario["実質利回り"] = (display_scenario["実質利回り"] * 100).round(2)
+                display_scenario.columns = [
+                    "シナリオ",
+                    "課税所得(万円)",
+                    "解約返戻金(万円)",
+                    "累計節税効果(万円)",
+                    "純利益(万円)",
+                    "実質利回り(%)",
+                ]
+                st.dataframe(display_scenario, use_container_width=True)
 
 
 def show_scenario_analysis():
@@ -5650,121 +5645,29 @@ def _show_insurance_comparison():
 
 
 def _show_optimal_withdrawal_timing():
-    """2-5: 最適解約タイミング分析"""
-    st.markdown("#### 投資信託 vs 生命保険の最適解約タイミング分析")
-    st.markdown("**戦略分析：乗り換えなし・あり（タイミング・部分解約）**")
+    """乗り換え戦略分析"""
+    st.markdown("#### 生命保険から投資信託への乗り換え戦略")
 
     # 設定確認
     if "fund_settings" not in st.session_state or "plan_settings" not in st.session_state:
-        st.warning("先に「2-1: 詳細プランの設定確認」と「2-2: 投資信託を分析」を完了してください。")
+        st.warning("先に「生命保険設定」と「投資信託を分析」を完了してください。")
         return
 
     plan = st.session_state.plan_settings
     fund = st.session_state.fund_settings
 
-    tab1, tab2, tab3 = st.tabs(
-        ["🚫 乗り換えなし戦略", "🔄 最適乗り換えタイミング", "⚖️ 部分解約戦略"]
-    )
+    # 基本比較へのリンク案内
+    st.info("💡 **基本比較タブ**で各商品を満期まで継続した場合の詳細比較をご確認ください")
+
+    tab1, tab2 = st.tabs(["🔄 最適乗り換えタイミング", "⚖️ 部分解約戦略"])
 
     with tab1:
-        st.markdown("##### 乗り換えなし：各商品を満期まで継続")
-        _show_no_switching_analysis(plan, fund)
-
-    with tab2:
         st.markdown("##### 生命保険から投資信託への最適乗り換えタイミング")
         _show_optimal_switching_timing(plan, fund)
 
-    with tab3:
+    with tab2:
         st.markdown("##### 部分解約を組み合わせた戦略")
         _show_partial_withdrawal_strategy(plan, fund)
-
-
-def _show_no_switching_analysis(plan: dict, fund: dict):
-    """乗り換えなし戦略の分析"""
-    monthly_premium = plan["monthly_premium"]
-    period = plan["investment_period"]
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("🏦 生命保険継続")
-
-        # 生命保険の最終価値計算（簡易版）
-        annual_rate = plan["annual_rate"] / 100
-        monthly_rate = annual_rate / 12
-        total_months = period * 12
-
-        net_premium = monthly_premium * (1 - plan["fee_rate"])
-
-        if monthly_rate > 0:
-            insurance_value = net_premium * ((1 + monthly_rate) ** total_months - 1) / monthly_rate
-        else:
-            insurance_value = net_premium * total_months
-
-        # 残高手数料
-        balance_fee = insurance_value * plan["balance_fee_rate"] * total_months
-        insurance_value -= balance_fee
-
-        # 節税効果
-        annual_premium = monthly_premium * 12
-        # 節税効果
-        annual_premium = monthly_premium * 12
-        tax_helper = get_tax_helper()
-        tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, 5000000)
-        annual_tax_savings = tax_result["total_savings"]
-        total_tax_savings = annual_tax_savings * period
-
-        insurance_total = insurance_value + total_tax_savings
-
-        st.metric("積立価値", f"{insurance_value:,.0f}円")
-        st.metric("節税効果", f"{total_tax_savings:,.0f}円")
-        st.metric("総価値", f"{insurance_total:,.0f}円")
-
-    with col2:
-        st.subheader("📈 投資信託継続")
-
-        # 投資信託の最終価値計算
-        net_return = fund["annual_return"] - fund["annual_fee"]
-        monthly_return = net_return / 12
-
-        if monthly_return > 0:
-            fund_value = (
-                monthly_premium * ((1 + monthly_return) ** total_months - 1) / monthly_return
-            )
-        else:
-            fund_value = monthly_premium * total_months
-
-        # 税金
-        total_investment = monthly_premium * total_months
-        capital_gain = max(0, fund_value - total_investment)
-        tax = capital_gain * fund["tax_rate"]
-        fund_net_value = fund_value - tax
-
-        st.metric("時価評価額", f"{fund_value:,.0f}円")
-        st.metric("税金", f"{tax:,.0f}円")
-        st.metric("税引後価値", f"{fund_net_value:,.0f}円")
-
-    # 比較結果
-    st.subheader("🔍 比較結果")
-    difference = fund_net_value - insurance_total
-
-    col_result1, col_result2, col_result3 = st.columns(3)
-
-    with col_result1:
-        st.metric("価値差", f"{difference:,.0f}円")
-
-    with col_result2:
-        if difference > 0:
-            st.success("投資信託が有利")
-            better = "投資信託"
-        else:
-            st.error("生命保険が有利")
-            better = "生命保険"
-        st.metric("優位商品", better)
-
-    with col_result3:
-        advantage = abs(difference) / min(insurance_total, fund_net_value)
-        st.metric("優位度", f"{advantage:.1%}")
 
 
 def _show_optimal_switching_timing(plan: dict, fund: dict):
@@ -6004,6 +5907,11 @@ def _show_partial_withdrawal_strategy(plan: dict, fund: dict):
                     withdrawal_fee_rate,
                     taxable_income,
                 )
+
+                # エラーハンドリング（計算関数で引数不整合などが起きた場合）
+                if "error" in result:
+                    st.error(result["error"])
+                    return
 
                 st.markdown("---")
                 st.markdown("### 📊 部分解約戦略の分析結果")
@@ -6283,7 +6191,8 @@ def _calculate_partial_withdrawal_value(
     fund_plan = FundPlan(
         annual_return=fund["annual_return"],
         annual_fee=fund["annual_fee"],
-        capital_gains_tax_rate=0.20315,
+        # FundPlan は tax_rate を受け取るため旧コードの capital_gains_tax_rate を修正
+        tax_rate=0.20315,
         reinvestment_rate=(
             0.5 if reinvestment == "混合" else (1.0 if reinvestment == "投資信託" else 0.0)
         ),
@@ -6292,11 +6201,13 @@ def _calculate_partial_withdrawal_value(
 
     # InsuranceCalculatorで計算
     calculator = InsuranceCalculator()
+    # 引数名を InsuranceCalculator のシグネチャに合わせて修正
+    # def calculate_partial_withdrawal_value(self, plan, withdrawal_ratio, withdrawal_interval, reinvestment_plan=None, taxable_income=...)
     result = calculator.calculate_partial_withdrawal_value(
-        insurance_plan=insurance_plan,
-        withdrawal_interval_years=interval,
+        plan=insurance_plan,
         withdrawal_ratio=ratio,
-        fund_plan=fund_plan,
+        withdrawal_interval=interval,
+        reinvestment_plan=fund_plan,
         taxable_income=5000000,
     )
 
@@ -6373,20 +6284,38 @@ def _calculate_partial_withdrawal_value_enhanced(
     fund_plan = FundPlan(
         annual_return=fund["annual_return"],
         annual_fee=fund["annual_fee"],
-        capital_gains_tax_rate=0.20315,
+        tax_rate=0.20315,  # 旧コードの capital_gains_tax_rate を修正
         reinvestment_rate=reinvestment_rate,
         use_nisa=use_nisa,
     )
 
     # InsuranceCalculatorで計算
     calculator = InsuranceCalculator()
-    result = calculator.calculate_partial_withdrawal_value(
-        insurance_plan=insurance_plan,
-        withdrawal_interval_years=interval,
-        withdrawal_ratio=ratio,
-        fund_plan=fund_plan,
-        taxable_income=taxable_income,
-    )
+    try:
+        result = calculator.calculate_partial_withdrawal_value(
+            plan=insurance_plan,
+            withdrawal_ratio=ratio,
+            withdrawal_interval=interval,
+            reinvestment_plan=fund_plan,
+            taxable_income=taxable_income,
+        )
+    except TypeError as e:
+        # 主に引数名・シグネチャ不整合時のデバッグ用。UI側で利用しやすい形で返す。
+        return {
+            "error": f"計算に失敗しました: {e}",
+            "remaining_insurance": 0,
+            "reinvestment_value": 0,
+            "tax_savings": 0,
+            "withdrawal_tax": 0,
+            "total_withdrawal_fees": 0,
+            "total_insurance_fees": 0,
+            "total_value": 0,
+            "vs_simple": 0,
+            "advantage_rate": 0,
+            "net_profit": 0,
+            "effective_return": 0,
+            "timeline": {"years": [], "insurance_value": [], "reinvestment_value": [], "total_value": []},
+        }
 
     # タイムライン生成（年次）
     timeline_years = list(range(1, period + 1))
@@ -6657,12 +6586,6 @@ def _show_existing_detailed_plan_analysis():
     _show_detailed_plan_analysis_content()
 
 
-def _show_existing_withdrawal_optimizer():
-    """既存の引き出しタイミング最適化を呼び出し"""
-    # 既存のshow_withdrawal_optimizerの内容をここに統合
-    _show_withdrawal_optimizer_content()
-
-
 def _show_detailed_plan_analysis_content():
     """詳細プラン分析の内容"""
     # ここに既存のshow_specific_plan_analysisの実装内容を移行
@@ -6696,216 +6619,6 @@ def _show_detailed_plan_analysis_content():
             future_value = monthly_premium * total_months
 
         st.metric("予想価値", f"{future_value:,.0f}円")
-
-
-def _show_withdrawal_optimizer_content():
-    """引き出しタイミング最適化の内容"""
-    st.markdown("### 🎯 部分解約戦略の最適化分析")
-    st.markdown("最適な引き出しタイミングと所得シナリオ別の効果を分析します")
-
-    # パラメータ入力
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("📝 基本パラメータ")
-
-        annual_premium = st.number_input(
-            "年間保険料（円）",
-            min_value=10000,
-            max_value=500000,
-            value=100000,
-            step=10000,
-            help="年間に支払う保険料",
-        )
-
-        taxable_income_man = st.number_input(
-            "課税所得（万円）",
-            min_value=100,
-            max_value=2000,
-            value=500,
-            step=50,
-            help="各種所得控除を差し引いた後の課税対象所得額",
-        )
-
-        taxable_income = taxable_income_man * 10000
-
-        policy_start_year = st.number_input(
-            "保険開始年", min_value=2010, max_value=datetime.now().year, value=2020, step=1
-        )
-
-        max_years = st.number_input(
-            "最大分析期間（年）",
-            min_value=5,
-            max_value=30,
-            value=20,
-            step=1,
-            help="何年後までの引き出しタイミングを分析するか",
-        )
-
-        return_rate = (
-            st.number_input(
-                "想定運用利回り（%）",
-                min_value=0.0,
-                max_value=10.0,
-                value=2.0,
-                step=0.1,
-                help="保険商品の想定運用利回り",
-            )
-            / 100
-        )
-
-    with col2:
-        st.subheader("📊 最適化実行")
-
-        if st.button("🚀 最適化分析を実行", type="primary"):
-            with st.spinner("最適化計算中..."):
-                # WithdrawalOptimizerのインスタンス作成
-                optimizer = WithdrawalOptimizer()
-
-                # 最適タイミング分析
-                best_timing, all_results = optimizer.optimize_withdrawal_timing(
-                    annual_premium, taxable_income, policy_start_year, max_years, return_rate
-                )
-
-                # 結果を表示
-                st.success("✅ 最適化完了")
-
-                st.markdown("#### 🎯 最適引き出しタイミング")
-                col_a, col_b, col_c = st.columns(3)
-
-                with col_a:
-                    st.metric(
-                        "最適引き出し年",
-                        f"{best_timing['引き出し年']}年",
-                        delta=f"{best_timing['保険期間']}年後",
-                    )
-
-                with col_b:
-                    st.metric("純利益", f"{best_timing['純利益']:,.0f}円")
-
-                with col_c:
-                    st.metric("実質利回り", f"{best_timing['実質利回り']:.2%}")
-
-                # 詳細情報
-                st.markdown("#### 📋 詳細情報")
-                detail_cols = st.columns(4)
-
-                with detail_cols[0]:
-                    st.metric("払込保険料合計", f"{best_timing['払込保険料合計']:,.0f}円")
-
-                with detail_cols[1]:
-                    st.metric("累計節税効果", f"{best_timing['累計節税効果']:,.0f}円")
-
-                with detail_cols[2]:
-                    st.metric("解約返戻金", f"{best_timing['解約返戻金']:,.0f}円")
-
-                with detail_cols[3]:
-                    st.metric("解約時所得税", f"{best_timing['解約時所得税']:,.0f}円")
-
-    # 所得シナリオ別比較
-    st.markdown("---")
-    st.markdown("### 💼 所得シナリオ別比較分析")
-
-    col_scenario1, col_scenario2 = st.columns(2)
-
-    with col_scenario1:
-        st.subheader("📝 シナリオ設定")
-
-        withdrawal_year = st.number_input(
-            "引き出し年（比較用）",
-            min_value=policy_start_year + 1,
-            max_value=policy_start_year + 30,
-            value=policy_start_year + 10,
-            step=1,
-        )
-
-    with col_scenario2:
-        st.subheader("🔧 比較所得レベル")
-
-        compare_low = st.checkbox("低所得（300万円）", value=True)
-        compare_high = st.checkbox("高所得（800万円）", value=True)
-        compare_super = st.checkbox("超高所得（1,200万円）", value=True)
-
-    if st.button("📊 所得シナリオ比較を実行"):
-        with st.spinner("シナリオ分析中..."):
-            optimizer = WithdrawalOptimizer()
-
-            # シナリオリスト作成
-            income_scenarios = []
-            if compare_low:
-                income_scenarios.append(("低所得", 3000000))
-            if compare_high:
-                income_scenarios.append(("高所得", 8000000))
-            if compare_super:
-                income_scenarios.append(("超高所得", 12000000))
-
-            # シナリオ分析実行
-            scenario_results = optimizer.analyze_income_scenarios(
-                annual_premium,
-                taxable_income,
-                income_scenarios,
-                policy_start_year,
-                withdrawal_year,
-                return_rate,
-            )
-
-            st.success("✅ シナリオ分析完了")
-
-            # 結果表示
-            st.markdown("#### 📊 所得シナリオ別比較結果")
-            st.dataframe(
-                scenario_results.style.format(
-                    {
-                        "課税所得": "{:,.0f}円",
-                        "累計節税効果": "{:,.0f}円",
-                        "解約返戻金": "{:,.0f}円",
-                        "解約時所得税": "{:,.0f}円",
-                        "純利益": "{:,.0f}円",
-                    }
-                ),
-                use_container_width=True,
-            )
-
-            # グラフ化
-            fig = go.Figure()
-
-            fig.add_trace(
-                go.Bar(
-                    name="累計節税効果",
-                    x=scenario_results["シナリオ"],
-                    y=scenario_results["累計節税効果"],
-                    marker_color="lightblue",
-                )
-            )
-
-            fig.add_trace(
-                go.Bar(
-                    name="純利益",
-                    x=scenario_results["シナリオ"],
-                    y=scenario_results["純利益"],
-                    marker_color="darkblue",
-                )
-            )
-
-            fig.update_layout(
-                title="所得シナリオ別：節税効果と純利益",
-                xaxis_title="所得シナリオ",
-                yaxis_title="金額（円）",
-                barmode="group",
-                height=400,
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            # 洞察
-            st.markdown("#### 💡 分析結果の洞察")
-            st.info(
-                f"""
-            - **所得が高いほど節税効果が大きい**: 高所得者ほど税率が高いため、控除による節税額が増加します
-            - **純利益も所得に応じて増加**: 節税効果の差が純利益の差に直結します
-            - **最適戦略**: 所得水準に応じて引き出しタイミングを調整することで、より高い実質リターンを得られます
-            """
-            )
 
 
 if __name__ == "__main__":

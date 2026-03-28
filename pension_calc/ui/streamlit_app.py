@@ -97,7 +97,7 @@ def main() -> None:
         "現在の年収（万円）",
         min_value=200,
         max_value=2000,
-        value=460,
+        value=1150,
         step=10,
         key="base_income_man",
     )
@@ -124,13 +124,14 @@ def main() -> None:
         )
 
     # タブ構成
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
         [
             "🏠 ホーム",
             "💰 支払実績",
             "🎯 受給額試算",
             "🔮 将来予測",
-            "📊 損益分岐・最適化",
+            "⚖️ 損益分岐点",
+            "🎯 最適化分析",
             "📋 計算方法",
         ]
     )
@@ -230,10 +231,10 @@ def main() -> None:
                     "加入月数", min_value=0, max_value=12, step=1
                 ),
                 "納付額": st.column_config.NumberColumn(
-                    "納付額", min_value=0, step=1000, format=",d"
+                    "納付額", min_value=0, step=1000, format="%,.0f 円"
                 ),
                 "推定年収": st.column_config.NumberColumn(
-                    "推定年収", min_value=0, step=10000, format=",d"
+                    "推定年収", min_value=0, step=10000, format="%,.0f 円"
                 ),
             },
         )
@@ -291,7 +292,57 @@ def main() -> None:
         kokumin_months_total = kokumin_months_past + add_months
         estimated_kokumin = full_amount_yearly * (kokumin_months_total / 480)
 
-        pension_res = calculator.calculate_future_pension(retirement_age=int(retirement_age))
+        # 将来予測の年収を取得（tab4と同じロジック）
+        remaining_years = max(0, int(retirement_age) - int(current_age))
+        career_df = putils.get_career_model(career_model_kind, to_yen=True)
+        
+        # スケール係数を計算
+        current_age_int = int(current_age)
+        matching_rows = career_df[career_df["年齢"] == current_age_int]
+        if len(matching_rows) > 0:
+            model_current_income = matching_rows.iloc[0]["推定年収(円)"]
+        else:
+            if current_age_int < career_df["年齢"].min():
+                model_current_income = career_df.iloc[0]["推定年収(円)"]
+            elif current_age_int > career_df["年齢"].max():
+                model_current_income = career_df.iloc[-1]["推定年収(円)"]
+            else:
+                lower_age = career_df[career_df["年齢"] < current_age_int]["年齢"].max()
+                upper_age = career_df[career_df["年齢"] > current_age_int]["年齢"].min()
+                lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
+                upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
+                ratio = (current_age_int - lower_age) / (upper_age - lower_age)
+                model_current_income = lower_income + (upper_income - lower_income) * ratio
+        
+        scale_factor = base_income_yen / model_current_income if model_current_income > 0 else 1.0
+        
+        # 将来の年収リストを作成
+        future_incomes = []
+        for i in range(remaining_years):
+            future_age = int(current_age) + i
+            matching_rows = career_df[career_df["年齢"] == future_age]
+            if len(matching_rows) > 0:
+                model_income = matching_rows.iloc[0]["推定年収(円)"]
+            else:
+                if future_age < career_df["年齢"].min():
+                    model_income = career_df.iloc[0]["推定年収(円)"]
+                elif future_age > career_df["年齢"].max():
+                    model_income = career_df.iloc[-1]["推定年収(円)"]
+                else:
+                    lower_age = career_df[career_df["年齢"] < future_age]["年齢"].max()
+                    upper_age = career_df[career_df["年齢"] > future_age]["年齢"].min()
+                    lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
+                    upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
+                    ratio = (future_age - lower_age) / (upper_age - lower_age)
+                    model_income = lower_income + (upper_income - lower_income) * ratio
+            future_incomes.append(model_income * scale_factor)
+
+        # 将来予測を含めた年金受給額計算
+        pension_res = calculator.calculate_future_pension(
+            retirement_age=int(retirement_age),
+            future_incomes=future_incomes if remaining_years > 0 else None,
+            current_age=int(current_age)
+        )
         estimated_kousei = max(0.0, pension_res["年間受給額"] - full_amount_yearly)
 
         def adj_rate(start_age: int) -> float:
@@ -307,16 +358,46 @@ def main() -> None:
         kokumin_adj = estimated_kokumin * adj
         kousei_adj = estimated_kousei * adj
         total_annual = kokumin_adj + kousei_adj
+        
+        # 月額計算
+        kokumin_monthly = kokumin_adj / 12
+        kousei_monthly = kousei_adj / 12
+        total_monthly = total_annual / 12
 
+        st.markdown("#### 📊 年額受給額")
         c1, c2, c3 = st.columns(3)
         with c1:
             st.metric("国民年金（年額）", f"{kokumin_adj:,.0f} 円", delta=f"調整率 {adj:.1%}")
         with c2:
             st.metric("厚生年金（年額）", f"{kousei_adj:,.0f} 円")
         with c3:
-            st.metric(
-                "合計（年額）", f"{total_annual:,.0f} 円", delta=f"月額 {total_annual/12:,.0f} 円"
-            )
+            st.metric("合計（年額）", f"{total_annual:,.0f} 円")
+        
+        st.markdown("#### 💰 月額受給額")
+        c4, c5, c6 = st.columns(3)
+        with c4:
+            st.metric("国民年金（月額）", f"{kokumin_monthly:,.0f} 円")
+        with c5:
+            st.metric("厚生年金（月額）", f"{kousei_monthly:,.0f} 円")
+        with c6:
+            st.metric("合計（月額）", f"{total_monthly:,.0f} 円", delta="年額の1/12")
+        
+        # 平均年収の内訳を表示
+        with st.expander("📋 厚生年金計算の詳細", expanded=False):
+            st.markdown("**平均年収の内訳**:")
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                st.metric("過去実績の平均年収", f"{pension_res['過去平均年収']:,.0f} 円")
+            with col_b:
+                if pension_res.get('将来平均年収'):
+                    st.metric("将来予測の平均年収", f"{pension_res['将来平均年収']:,.0f} 円")
+                else:
+                    st.info("将来予測なし")
+            with col_c:
+                st.metric("加重平均年収", f"{pension_res['平均年収']:,.0f} 円", 
+                         delta="厚生年金計算に使用")
+            
+            st.caption(f"加入月数: {pension_res['加入月数']:.0f}ヶ月 | キャリアモデル: {career_model_kind} | スケール係数: {scale_factor:.2f}倍")
 
         st.markdown("### 📈 年間受給額の推移（生涯）")
         years = list(range(int(pension_start_age), int(life_expectancy) + 1))
@@ -331,13 +412,73 @@ def main() -> None:
     with tab4:
         st.subheader("🔮 将来予測")
         remaining_years = max(0, int(retirement_age) - int(current_age))
-        incomes = putils.estimate_income_by_company_growth(
-            base_income_yen, growth_rate, remaining_years
-        )
-        years_axis = list(range(pd.Timestamp.now().year, pd.Timestamp.now().year + remaining_years))
+        
+        # キャリアモデルから将来年収を取得
+        career_df = putils.get_career_model(career_model_kind, to_yen=True)
+        current_year = pd.Timestamp.now().year
+        
+        # 現在の年収を基準にキャリアモデルをスケール調整
+        # 現在年齢のキャリアモデル年収を取得
+        current_age_int = int(current_age)
+        model_current_income = None
+        
+        # 現在年齢のモデル年収を取得（補間含む）
+        matching_rows = career_df[career_df["年齢"] == current_age_int]
+        if len(matching_rows) > 0:
+            model_current_income = matching_rows.iloc[0]["推定年収(円)"]
+        else:
+            # 補間
+            if current_age_int < career_df["年齢"].min():
+                model_current_income = career_df.iloc[0]["推定年収(円)"]
+            elif current_age_int > career_df["年齢"].max():
+                model_current_income = career_df.iloc[-1]["推定年収(円)"]
+            else:
+                lower_age = career_df[career_df["年齢"] < current_age_int]["年齢"].max()
+                upper_age = career_df[career_df["年齢"] > current_age_int]["年齢"].min()
+                lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
+                upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
+                ratio = (current_age_int - lower_age) / (upper_age - lower_age)
+                model_current_income = lower_income + (upper_income - lower_income) * ratio
+        
+        # スケール係数を計算（現在の年収 / モデルの現在年齢年収）
+        scale_factor = base_income_yen / model_current_income if model_current_income > 0 else 1.0
+        
+        years_axis = []
+        incomes = []
+        
+        for i in range(remaining_years):
+            future_age = int(current_age) + i
+            future_year = current_year + i
+            
+            # キャリアモデルから該当年齢の年収を取得
+            matching_rows = career_df[career_df["年齢"] == future_age]
+            if len(matching_rows) > 0:
+                model_income = matching_rows.iloc[0]["推定年収(円)"]
+            else:
+                # キャリアモデルにない年齢の場合は線形補間または最後の値を使用
+                if future_age < career_df["年齢"].min():
+                    model_income = career_df.iloc[0]["推定年収(円)"]
+                elif future_age > career_df["年齢"].max():
+                    model_income = career_df.iloc[-1]["推定年収(円)"]
+                else:
+                    # 線形補間
+                    lower_age = career_df[career_df["年齢"] < future_age]["年齢"].max()
+                    upper_age = career_df[career_df["年齢"] > future_age]["年齢"].min()
+                    lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
+                    upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
+                    ratio = (future_age - lower_age) / (upper_age - lower_age)
+                    model_income = lower_income + (upper_income - lower_income) * ratio
+            
+            # スケール調整後の年収
+            income = model_income * scale_factor
+            
+            years_axis.append(future_year)
+            incomes.append(income)
 
         st.markdown("### 📈 推定年収（将来）")
-        if remaining_years > 0 and len(incomes) == remaining_years:
+        st.caption(f"使用中のキャリアモデル: **{career_model_kind}** | 現在年収: **{base_income_man:,.0f}万円** | スケール係数: **{scale_factor:.2f}倍**")
+        
+        if remaining_years > 0 and len(incomes) > 0:
             fig_f = go.Figure()
             fig_f.add_trace(
                 go.Scatter(x=years_axis, y=incomes, mode="lines+markers", name="推定年収")
@@ -346,8 +487,42 @@ def main() -> None:
                 title="推定年収（円）", xaxis_title="年度", yaxis_title="年収（円）", height=360
             )
             st.plotly_chart(fig_f, config={"responsive": True})
+            
+            # 年収の詳細テーブル表示（役職付き）
+            with st.expander("📋 年収詳細データ（キャリアモデル反映）", expanded=False):
+                detail_data = []
+                for i in range(len(years_axis)):
+                    future_age = int(current_age) + i
+                    matching_rows = career_df[career_df["年齢"] == future_age]
+                    
+                    if len(matching_rows) > 0:
+                        position = matching_rows.iloc[0]["役職"]
+                        is_model_value = "✓"
+                    else:
+                        position = "（補間値）"
+                        is_model_value = "-"
+                    
+                    detail_data.append({
+                        "年度": years_axis[i],
+                        "年齢": future_age,
+                        "役職": position,
+                        "推定年収（円）": f"{int(incomes[i]):,}",
+                        "モデル値": is_model_value
+                    })
+                
+                income_detail_df = pd.DataFrame(detail_data)
+                st.dataframe(income_detail_df, use_container_width=True, hide_index=True)
+                st.caption("✓: キャリアモデルの値  -: 線形補間による推定値")
         else:
             st.info("将来年数が0年のため、年収予測は表示できません。")
+        
+        # キャリアモデルの全体像を表示
+        with st.expander(f"📊 {career_model_kind}モデルの全体像", expanded=False):
+            st.markdown("**キャリアモデルの定義データ**:")
+            model_display_df = career_df.copy()
+            model_display_df["推定年収（円）"] = model_display_df["推定年収(円)"].apply(lambda x: f"{int(x):,}")
+            model_display_df = model_display_df[["年齢", "役職", "推定年収（円）"]]
+            st.dataframe(model_display_df, use_container_width=True, hide_index=True)
 
         st.markdown("### 🏛️ 国民年金保険料（実績・予測）")
         years_actual, national_history, future_years_pension, future_fees = (
@@ -589,13 +764,172 @@ def main() -> None:
 
         st.plotly_chart(fig, config={"responsive": True})
 
-        # 最適受給開始年齢の計算
-        st.markdown("### 🎯 最適受給開始年齢分析")
+        # 最適受給開始年齢の簡易表示（現在の設定値のみ）
+        st.markdown("### 🎯 設定に基づいた最適受給開始年齢分析")
+        st.info(f"現在の受給開始年齢設定: **{int(pension_start_age)}歳**")
+        
+        # 現在の設定での受給額詳細
+        current_start_age = int(pension_start_age)
+        
+        # 調整率の計算
+        if current_start_age < 65:
+            months_early = (65 - current_start_age) * 12
+            current_adjustment_rate = 1.0 - (months_early * 0.004)
+        elif current_start_age > 65:
+            months_late = (current_start_age - 65) * 12
+            current_adjustment_rate = 1.0 + (months_late * 0.007)
+        else:
+            current_adjustment_rate = 1.0
+        
+        # 受給額計算（tab3と同じロジック）
+        current_annual = total_annual  # tab3で計算済み
+        current_monthly = current_annual / 12
+        
+        col_opt1, col_opt2, col_opt3 = st.columns(3)
+        with col_opt1:
+            st.metric("最適受給開始年齢", f"{current_start_age}歳", delta=f"調整率 {current_adjustment_rate:.1%}")
+        with col_opt2:
+            st.metric("年間受給額", f"{current_annual:,.0f} 円")
+        with col_opt3:
+            st.metric("月額受給額", f"{current_monthly:,.0f} 円")
+        
+        # 詳細計算表の作成
+        st.markdown("#### 📋 受給開始年齢の詳細計算")
+        
+        # 基礎データ
+        basic_pension_base = 780900 * (putils.paid_months_kokumin() / 480)
+        
+        try:
+            insured_months = putils.past_insured_months()
+            # 将来予測を含めた平均年収を使用（tab3で計算済み）
+            if pension_res.get('平均年収'):
+                avg_salary = pension_res['平均年収']
+            else:
+                avg_salary = 4000000  # デフォルト
+            earnings_related_base = (avg_salary / 12) * 0.005481 * insured_months
+        except:
+            earnings_related_base = 0
+        
+        annual_pension_base = basic_pension_base + earnings_related_base
+        
+        # 受給期間
+        receiving_years = max(0, int(life_expectancy) - current_start_age)
+        lifetime_total = current_annual * receiving_years
+        
+        # 詳細データ表示
+        detail_data = {
+            "項目": [
+                "受給開始年齢",
+                "調整率",
+                "国民年金（年額）",
+                "厚生年金（年額）",
+                "合計（年額）",
+                "合計（月額）",
+                "受給期間",
+                "生涯総受給額"
+            ],
+            "値": [
+                f"{current_start_age}歳",
+                f"{current_adjustment_rate:.1%}",
+                f"{kokumin_adj:,.0f} 円",
+                f"{kousei_adj:,.0f} 円",
+                f"{current_annual:,.0f} 円",
+                f"{current_monthly:,.0f} 円",
+                f"{receiving_years}年",
+                f"{lifetime_total/1_000_000:.1f} 百万円"
+            ]
+        }
+        
+        detail_df = pd.DataFrame(detail_data)
+        st.dataframe(detail_df, use_container_width=True, hide_index=True)
+        
+        st.caption("💡 より詳細な最適化分析（複数の受給開始年齢の比較）は「🎯 最適化分析」タブをご覧ください")
+
+    with tab6:
+        st.subheader("🎯 最適化分析")
+        st.markdown("様々なパラメータの範囲で最適な年金受給開始年齢を分析します")
+        
+        # パラメータ範囲の設定
+        st.markdown("#### ⚙️ 分析範囲の設定")
+        col_param1, col_param2, col_param3 = st.columns(3)
+        
+        with col_param1:
+            st.markdown("**退職年齢の範囲**")
+            retirement_min = max(55, int(retirement_age) - 5)
+            retirement_max = min(75, int(retirement_age) + 5)
+            st.caption(f"{retirement_min}歳 ～ {retirement_max}歳")
+        
+        with col_param2:
+            st.markdown("**年金受給開始の範囲**")
+            pension_start_min = 65
+            pension_start_max = 75
+            st.caption(f"{pension_start_min}歳 ～ {pension_start_max}歳")
+        
+        with col_param3:
+            st.markdown("**想定寿命の範囲**")
+            life_min = max(70, int(life_expectancy) - 5)
+            life_max = min(120, int(life_expectancy) + 5)
+            st.caption(f"{life_min}歳 ～ {life_max}歳")
 
         def calculate_optimal_start_age():
-            """最適な受給開始年齢を計算"""
-            candidates = list(range(60, 76))
+            """最適な受給開始年齢を計算（パラメータ範囲を考慮）"""
+            candidates = list(range(pension_start_min, pension_start_max + 1))
             results = []
+            
+            # 将来予測の年収を取得（tab3と同じロジック）
+            remaining_years = max(0, int(retirement_age) - int(current_age))
+            career_df = putils.get_career_model(career_model_kind, to_yen=True)
+            
+            # スケール係数を計算
+            current_age_int = int(current_age)
+            matching_rows = career_df[career_df["年齢"] == current_age_int]
+            if len(matching_rows) > 0:
+                model_current_income = matching_rows.iloc[0]["推定年収(円)"]
+            else:
+                if current_age_int < career_df["年齢"].min():
+                    model_current_income = career_df.iloc[0]["推定年収(円)"]
+                elif current_age_int > career_df["年齢"].max():
+                    model_current_income = career_df.iloc[-1]["推定年収(円)"]
+                else:
+                    lower_age = career_df[career_df["年齢"] < current_age_int]["年齢"].max()
+                    upper_age = career_df[career_df["年齢"] > current_age_int]["年齢"].min()
+                    lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
+                    upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
+                    ratio = (current_age_int - lower_age) / (upper_age - lower_age)
+                    model_current_income = lower_income + (upper_income - lower_income) * ratio
+            
+            scale_factor = base_income_yen / model_current_income if model_current_income > 0 else 1.0
+            
+            # 将来の年収リストを作成
+            future_incomes = []
+            for i in range(remaining_years):
+                future_age = int(current_age) + i
+                matching_rows = career_df[career_df["年齢"] == future_age]
+                if len(matching_rows) > 0:
+                    model_income = matching_rows.iloc[0]["推定年収(円)"]
+                else:
+                    if future_age < career_df["年齢"].min():
+                        model_income = career_df.iloc[0]["推定年収(円)"]
+                    elif future_age > career_df["年齢"].max():
+                        model_income = career_df.iloc[-1]["推定年収(円)"]
+                    else:
+                        lower_age = career_df[career_df["年齢"] < future_age]["年齢"].max()
+                        upper_age = career_df[career_df["年齢"] > future_age]["年齢"].min()
+                        lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
+                        upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
+                        ratio = (future_age - lower_age) / (upper_age - lower_age)
+                        model_income = lower_income + (upper_income - lower_income) * ratio
+                future_incomes.append(model_income * scale_factor)
+            
+            # 将来予測を含めた年金受給額計算
+            pension_calc_res = calculator.calculate_future_pension(
+                retirement_age=int(retirement_age),
+                future_incomes=future_incomes if remaining_years > 0 else None,
+                current_age=int(current_age)
+            )
+            
+            # 加重平均年収を使用
+            avg_salary = pension_calc_res.get('平均年収', 4000000)
 
             for start_age in candidates:
                 # 調整率の計算
@@ -612,22 +946,6 @@ def main() -> None:
                 basic_pension = 780900 * (putils.paid_months_kokumin() / 480)
                 try:
                     insured_months = putils.past_insured_months()
-                    try:
-                        career_model_df = putils.get_career_model(career_model_kind, to_yen=False)
-                        if len(career_model_df) > 0:
-                            salary_col = None
-                            for col in career_model_df.columns:
-                                if "推定年収" in col:
-                                    salary_col = col
-                                    break
-                            if salary_col:
-                                avg_salary = career_model_df[salary_col].mean() * 10000
-                            else:
-                                avg_salary = 400000
-                        else:
-                            avg_salary = 400000
-                    except:
-                        avg_salary = 400000
                     earnings_related = (avg_salary / 12) * 0.005481 * insured_months
                 except:
                     earnings_related = 0
@@ -657,30 +975,67 @@ def main() -> None:
             df_results = pd.DataFrame(optimization_results)
             best_result = df_results.loc[df_results["生涯総受給額"].idxmax()]
 
-            opt_col1, opt_col2, opt_col3 = st.columns(3)
+            st.markdown("### 🏆 最適化結果")
+            
+            opt_col1, opt_col2, opt_col3, opt_col4 = st.columns(4)
 
             with opt_col1:
-                st.metric("最適受給開始年齢", f"{int(best_result['受給開始年齢'])}歳")
+                st.metric("最適受給開始年齢", f"{int(best_result['受給開始年齢'])}歳", 
+                         delta="生涯総受給額最大")
 
             with opt_col2:
-                st.metric("最大生涯総受給額", f"{best_result['生涯総受給額']:,.0f} 円")
-
+                st.metric("年間受給額", f"{best_result['年間受給額']:,.0f} 円")
+            
             with opt_col3:
+                best_monthly = best_result['年間受給額'] / 12
+                st.metric("月額受給額", f"{best_monthly:,.0f} 円")
+
+            with opt_col4:
                 st.metric("調整率", f"{best_result['調整率']:.1%}")
+            
+            # 追加情報
+            info_col1, info_col2 = st.columns(2)
+            with info_col1:
+                st.metric("受給期間", f"{int(best_result['受給期間'])}年")
+            with info_col2:
+                st.metric("生涯総受給額", f"{best_result['生涯総受給額']/1_000_000:.1f} 百万円")
 
             # 結果テーブルの表示
-            st.markdown("#### 📋 受給開始年齢別比較表")
+            st.markdown("### 📋 受給開始年齢別比較表")
 
             df_display = df_results.copy()
+            df_display["月額受給額"] = df_display["年間受給額"].map(lambda x: f"{x/12:,.0f} 円")
             df_display["調整率"] = df_display["調整率"].map(lambda x: f"{x:.1%}")
             df_display["年間受給額"] = df_display["年間受給額"].map(lambda x: f"{x:,.0f} 円")
             df_display["生涯総受給額"] = df_display["生涯総受給額"].map(
                 lambda x: f"{x/1_000_000:.1f} 百万円"
             )
+            df_display = df_display[["受給開始年齢", "調整率", "月額受給額", "年間受給額", "受給期間", "生涯総受給額"]]
 
-            st.dataframe(df_display, width="stretch", hide_index=True)
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+            
+            # グラフ表示
+            st.markdown("### 📊 生涯総受給額の比較")
+            fig_opt = go.Figure()
+            fig_opt.add_trace(
+                go.Bar(
+                    x=df_results["受給開始年齢"],
+                    y=df_results["生涯総受給額"] / 1_000_000,
+                    marker_color=["green" if age == best_result["受給開始年齢"] else "lightblue" 
+                                 for age in df_results["受給開始年齢"]],
+                    text=df_results["生涯総受給額"].apply(lambda x: f"{x/1_000_000:.1f}"),
+                    textposition="auto"
+                )
+            )
+            fig_opt.update_layout(
+                title="受給開始年齢別の生涯総受給額",
+                xaxis_title="受給開始年齢（歳）",
+                yaxis_title="生涯総受給額（百万円）",
+                height=400
+            )
+            st.plotly_chart(fig_opt, use_container_width=True)
 
-    with tab6:
+    with tab7:
         st.subheader("📋 計算方法")
         st.markdown(
             """

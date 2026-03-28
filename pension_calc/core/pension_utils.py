@@ -177,15 +177,12 @@ def _coerce_dtypes(df: pd.DataFrame) -> pd.DataFrame:
         if col not in df2.columns:
             df2[col] = pd.Series([None] * len(df2))
     df2 = df2[DATA_COLUMNS]
-    # 数値列の型変換
+    # 数値列の型変換（fillna→astype の順番で _NoValueType を回避）
     for col in ["年度", "年齢", "加入月数", "納付額", "推定年収"]:
-        df2[col] = pd.to_numeric(df2[col], errors="coerce").astype("Int64")
-    # 文字列列
-    df2["加入制度"] = df2["加入制度"].astype("string")
-    df2["お勤め先"] = df2["お勤め先"].astype("string")
-    # 欠損を 0 に置換（数値列）
-    for col in ["加入月数", "納付額", "推定年収"]:
-        df2[col] = df2[col].fillna(0)
+        df2[col] = pd.to_numeric(df2[col], errors="coerce").fillna(0).astype("int64")
+    # 文字列列（fillna→astype の順番）
+    df2["加入制度"] = df2["加入制度"].fillna("").astype("string")
+    df2["お勤め先"] = df2["お勤め先"].fillna("").astype("string")
     return df2
 
 
@@ -209,7 +206,7 @@ def get_career_model(kind: str = "default", to_yen: bool = False) -> pd.DataFram
     models = {
         "default": [
             {"年齢": 30, "役職": "指導職", "推定年収(万円)": 850},
-            {"年齢": 35, "役職": "主任", "推定年収(万円)": 1150},
+            {"年齢": 33, "役職": "主任", "推定年収(万円)": 1150},
             {"年齢": 40, "役職": "基幹職", "推定年収(万円)": 1280},
             {"年齢": 45, "役職": "基幹職", "推定年収(万円)": 1380},
             {"年齢": 50, "役職": "基幹職", "推定年収(万円)": 1430},
@@ -338,12 +335,16 @@ class PensionCalculator(BaseFinancialCalculator):
 
         return True
 
-    def calculate_future_pension(self, retirement_age: int = 65) -> Dict:
+    def calculate_future_pension(
+        self, retirement_age: int = 65, future_incomes: list = None, current_age: int = None
+    ) -> Dict:
         """
         将来の年金受給額を計算
 
         Args:
             retirement_age: 退職年齢
+            future_incomes: 将来の年収リスト（オプション）
+            current_age: 現在の年齢（オプション）
 
         Returns:
             計算結果の辞書
@@ -351,11 +352,35 @@ class PensionCalculator(BaseFinancialCalculator):
         # 既にfloat型に変換済みなので直接集計（min_count=0で _NoValueType を回避）
         total_contribution = self.df["納付額"].sum(min_count=0)
         total_months = self.df["加入月数"].sum(min_count=0)
-        average_income = self.df["推定年収"].mean()
+        past_average_income = self.df["推定年収"].mean()
+
+        # 将来予測の年収を考慮した平均年収を計算
+        if future_incomes and current_age and retirement_age > current_age:
+            # 過去の実績年数（厚生年金加入期間）
+            past_years = total_months / 12
+            
+            # 将来の予測年数
+            future_years = retirement_age - current_age
+            
+            # 将来の平均年収
+            future_average_income = sum(future_incomes) / len(future_incomes) if future_incomes else past_average_income
+            
+            # 加重平均（過去実績 + 将来予測）
+            total_years = past_years + future_years
+            average_income = (past_average_income * past_years + future_average_income * future_years) / total_years
+            
+            # 将来の加入月数を追加
+            future_months = future_years * 12
+            total_months_with_future = total_months + future_months
+        else:
+            # 将来予測なしの場合は過去実績のみ
+            average_income = past_average_income
+            total_months_with_future = total_months
+            future_average_income = None
 
         # 簡易的な年金受給額計算
         basic_pension = 780900  # 基礎年金満額（令和5年度）
-        employment_pension = average_income * 0.005481 * (total_months / 12)
+        employment_pension = average_income * 0.005481 * (total_months_with_future / 12)
 
         annual_pension = basic_pension + employment_pension
 
@@ -363,8 +388,10 @@ class PensionCalculator(BaseFinancialCalculator):
             "年間受給額": annual_pension,
             "月額受給額": annual_pension / 12,
             "総納付額": total_contribution,
-            "加入月数": total_months,
+            "加入月数": total_months_with_future,
             "平均年収": average_income,
+            "過去平均年収": past_average_income,
+            "将来平均年収": future_average_income,
             "受給開始年齢": retirement_age,
         }
 

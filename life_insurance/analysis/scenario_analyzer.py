@@ -293,13 +293,18 @@ class ScenarioAnalyzer:
         risk_metrics = {}
         if monte_carlo_results is not None:
             # 明示的に数値型に変換して_NoValueType問題を回避
-            net_profit_series = pd.to_numeric(monte_carlo_results["純利益"], errors='coerce')
-            return_rate_series = pd.to_numeric(monte_carlo_results["実質利回り"], errors='coerce')
+            # .copy() と astype('float64') で完全に新しいデータ型に変換
+            net_profit_series = pd.to_numeric(monte_carlo_results["純利益"], errors='coerce').fillna(0).copy().astype('float64')
+            return_rate_series = pd.to_numeric(monte_carlo_results["実質利回り"], errors='coerce').fillna(0).copy().astype('float64')
+            
+            # numpy配列として計算して _NoValueType を完全に排除
+            net_profit_values = net_profit_series.values
+            return_rate_values = return_rate_series.values
             
             risk_metrics = {
-                "純利益_負の確率": float((net_profit_series < 0).mean()),
-                "純利益_VaR_5%": float(net_profit_series.quantile(0.05)),
-                "実質利回り_負の確率": float((return_rate_series < 0).mean()),
+                "純利益_負の確率": float(np.mean(net_profit_values < 0)),
+                "純利益_VaR_5%": float(np.percentile(net_profit_values, 5)),
+                "実質利回り_負の確率": float(np.mean(return_rate_values < 0)),
             }
 
         # 感度が高いパラメータの特定
