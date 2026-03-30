@@ -1,0 +1,51 @@
+name: Deploy - Streamlit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "life_insurance/**"
+      - "pension_calc/**"
+      - "investment_simulation/**"
+      - "vehicle_finance/**"
+      - "common/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - "main.py"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Trigger Streamlit Cloud Deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deploy hook
+        id: hook
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.STREAMLIT_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "has_hook=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_hook=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger deploy hook
+        if: steps.hook.outputs.has_hook == 'true'
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.STREAMLIT_DEPLOY_HOOK_URL }}
+        run: |
+          curl -X POST "$DEPLOY_HOOK_URL"
+
+      - name: Deployment summary
+        if: steps.hook.outputs.has_hook == 'true'
+        run: |
+          echo "# Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "Streamlit Cloud deploy hook was triggered." >> $GITHUB_STEP_SUMMARY
+
+      - name: Deployment skip summary
+        if: steps.hook.outputs.has_hook == 'false'
+        run: |
+          echo "# Deployment Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "Set STREAMLIT_DEPLOY_HOOK_URL secret to enable automatic deploy." >> $GITHUB_STEP_SUMMARY
