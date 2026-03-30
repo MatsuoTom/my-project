@@ -64,7 +64,13 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["common/tests", "life_insurance/tests", "tests"]
+testpaths = [
+    "common/tests",
+    "life_insurance/tests",
+    "investment_simulation/tests",
+    "vehicle_finance/tests",
+    "tests",
+]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -77,7 +83,7 @@ markers = [
 [tool.coverage.run]
 branch = false
 parallel = true
-source = ["life_insurance", "pension_calc"]
+source = ["common", "life_insurance", "pension_calc", "investment_simulation", "vehicle_finance"]
 omit = [
     "*/tests/*",
     "*/test_*.py",

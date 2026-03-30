@@ -130,20 +130,17 @@ def test_analyze_all_strategies():
         print("  - 再投資利回りが保険の運用利回りを上回る場合、部分解約戦略が有利")
         print("  - 預金（1%）程度でも、適切なタイミングでの部分解約により資金効率が向上")
         
-        return True
-        
     except Exception as e:
         print(f"❌ エラー発生: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"analyze_all_strategies の実行中に例外: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":
-    success = test_analyze_all_strategies()
-    
-    if success:
+    try:
+        test_analyze_all_strategies()
         print("\n\n=== テスト完了: 成功 ✅ ===")
-    else:
+    except Exception:
         print("\n\n=== テスト完了: 失敗 ❌ ===")
         sys.exit(1)

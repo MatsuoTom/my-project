@@ -179,10 +179,10 @@ class BrandMaster:
         
         return result
     
-    def add_brand(self, code: str, name: str, broker: str = "", account: str = "特定", 
-                  category: str = "その他", region: str = "その他", 
-                  current_price: float = 0.0, profit: float = 0.0, 
-                  investment_date: str = "") -> bool:
+    def add_brand(self, code: str, name: str, broker: str = "", account: str = "特定",
+                  category: str = "その他", region: str = "その他",
+                  current_price: float = 0.0, principal: Optional[float] = None,
+                  profit: Optional[float] = None, investment_date: str = "") -> bool:
         """
         銘柄の追加
         
@@ -194,7 +194,8 @@ class BrandMaster:
             category: カテゴリ
             region: 地域
             current_price: 現在価格（評価額）
-            profit: 利益額
+            principal: 元本（指定時は優先）
+            profit: 利益額（principal 未指定時に使用）
             investment_date: 投資開始日（YYYY-MM-DD形式）
         
         Returns:
@@ -205,8 +206,20 @@ class BrandMaster:
             print(f"銘柄コード '{code}' は既に登録されています")
             return False
         
-        # 元本、利率、年利を計算
-        principal = current_price - profit
+        # 後方互換のため principal/profit のどちらの入力でも計算可能にする
+        if principal is None and profit is None:
+            principal = current_price
+            profit = 0.0
+        elif principal is None and profit is not None:
+            principal = current_price - profit
+        elif principal is not None and profit is None:
+            profit = current_price - principal
+        else:
+            # 両方指定時に不整合があれば current_price/principal を優先
+            expected_profit = current_price - principal
+            if abs(expected_profit - profit) > 1e-9:
+                profit = expected_profit
+
         profit_rate = (profit / principal * 100) if principal > 0 else 0.0
         annual_return = self._calculate_annual_return(profit, principal, investment_date)
         
@@ -270,9 +283,10 @@ class BrandMaster:
             return 0.0
     
     def update_brand(self, code: str, name: Optional[str] = None, broker: Optional[str] = None,
-                     account: Optional[str] = None, category: Optional[str] = None, 
+                     account: Optional[str] = None, category: Optional[str] = None,
                      region: Optional[str] = None, current_price: Optional[float] = None,
-                     profit: Optional[float] = None, investment_date: Optional[str] = None) -> bool:
+                     principal: Optional[float] = None, profit: Optional[float] = None,
+                     investment_date: Optional[str] = None) -> bool:
         """
         銘柄情報の更新
         
@@ -284,6 +298,7 @@ class BrandMaster:
             category: 新しいカテゴリ（Noneの場合は変更なし）
             region: 新しい地域（Noneの場合は変更なし）
             current_price: 新しい現在価格（Noneの場合は変更なし）
+            principal: 新しい元本（Noneの場合は変更なし）
             profit: 新しい利益額（Noneの場合は変更なし）
             investment_date: 新しい投資開始日（Noneの場合は変更なし）
         
@@ -304,21 +319,35 @@ class BrandMaster:
                     brand['region'] = region
                 if current_price is not None:
                     brand['current_price'] = current_price
+                if principal is not None:
+                    brand['principal'] = principal
                 if profit is not None:
                     brand['profit'] = profit
                 if investment_date is not None:
                     brand['investment_date'] = investment_date
-                
-                # 元本、利率、年利を再計算
+
+                # 元本/利益の整合を取りつつ、利率・年利を再計算
                 current = brand.get('current_price', 0.0)
+                principal_value = brand.get('principal', 0.0)
                 prof = brand.get('profit', 0.0)
                 inv_date = brand.get('investment_date', '')
+
+                if principal is None and profit is None:
+                    principal_value = current - prof
+                elif principal is not None and profit is None:
+                    prof = current - principal_value
+                elif principal is None and profit is not None:
+                    principal_value = current - prof
+                else:
+                    expected_profit = current - principal_value
+                    if abs(expected_profit - prof) > 1e-9:
+                        prof = expected_profit
+
+                profit_rate = (prof / principal_value * 100) if principal_value > 0 else 0.0
+                annual_return = self._calculate_annual_return(prof, principal_value, inv_date)
                 
-                principal = current - prof
-                profit_rate = (prof / principal * 100) if principal > 0 else 0.0
-                annual_return = self._calculate_annual_return(prof, principal, inv_date)
-                
-                brand['principal'] = principal
+                brand['principal'] = principal_value
+                brand['profit'] = prof
                 brand['profit_rate'] = profit_rate
                 brand['annual_return'] = annual_return
                 brand['updated_at'] = datetime.now().isoformat()
