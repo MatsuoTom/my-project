@@ -51,6 +51,11 @@ Thumbs.db
 # Streamlit (secrets only)
 .streamlit/secrets.toml
 
+# Local app data / generated artifacts
+vehicle_finance/data/saved_plans/
+archive/backup_*/
+archive/*.bak
+
 # mypy
 .mypy_cache/
 .dmypy.json
