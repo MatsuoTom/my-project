@@ -23,6 +23,95 @@ from life_insurance.analysis.insurance_calculator import InsuranceCalculator
 from life_insurance.models import InsurancePlan, FundPlan
 
 
+@st.cache_resource
+def _get_deduction_calculator() -> LifeInsuranceDeductionCalculator:
+    return LifeInsuranceDeductionCalculator()
+
+
+@st.cache_resource
+def _get_tax_helper_cached():
+    return get_tax_helper()
+
+
+@st.cache_resource
+def _get_withdrawal_optimizer() -> WithdrawalOptimizer:
+    return WithdrawalOptimizer()
+
+
+@st.cache_resource
+def _get_insurance_calculator() -> InsuranceCalculator:
+    return InsuranceCalculator()
+
+
+@st.cache_data(show_spinner=False)
+def _analyze_all_strategies_cached(
+    annual_premium: float,
+    annual_income: float,
+    base_year: int,
+    contract_years: int,
+    annual_interest_rate: float,
+    withdrawal_reinvest_rate: float,
+) -> pd.DataFrame:
+    year_range = list(range(max(5, base_year - 5), min(contract_years, base_year + 5) + 1))
+    rate_min = max(0.01, 0.5 - 0.5)
+    rate_max = min(1.0, 0.5 + 0.5)
+    rate_range = [round(r, 2) for r in list(np.arange(rate_min, rate_max + 0.01, 0.1)) if r > 0]
+    interval_range = [1, 2, 3, 4, 5]
+    switch_rates = [0.01, 0.02, 0.03, 0.04, 0.05]
+
+    strategies = _get_withdrawal_optimizer().analyze_all_strategies(
+        initial_premium=0,
+        annual_premium=annual_premium,
+        taxable_income=annual_income,
+        policy_start_year=2025 - base_year,
+        interval_range=interval_range,
+        rate_range=rate_range,
+        full_withdrawal_years=year_range,
+        switch_years=year_range,
+        switch_rates=switch_rates,
+        max_years=contract_years,
+        return_rate=annual_interest_rate,
+        withdrawal_reinvest_rate=withdrawal_reinvest_rate,
+    )
+    return strategies.copy() if strategies is not None else pd.DataFrame()
+
+
+@st.cache_data(show_spinner=False)
+def _optimize_withdrawal_timing_cached(
+    annual_premium: float,
+    taxable_income: float,
+    policy_start_year: int,
+    max_years: int,
+    return_rate: float,
+) -> Tuple[Dict, pd.DataFrame]:
+    best_timing, all_results = _get_withdrawal_optimizer().optimize_withdrawal_timing(
+        annual_premium,
+        taxable_income,
+        policy_start_year,
+        max_years,
+        return_rate,
+    )
+    return best_timing.copy(), all_results.copy()
+
+
+@st.cache_data(show_spinner=False)
+def _analyze_income_scenarios_cached(
+    annual_premium: float,
+    taxable_income: float,
+    income_scenarios: Tuple[Tuple[str, float], ...],
+    policy_start_year: int,
+    withdrawal_year_scenario: int,
+) -> pd.DataFrame:
+    result = _get_withdrawal_optimizer().analyze_income_scenarios(
+        annual_premium,
+        taxable_income,
+        list(income_scenarios),
+        policy_start_year,
+        withdrawal_year_scenario,
+    )
+    return result.copy()
+
+
 def main():
     """メインアプリケーション"""
     st.set_page_config(page_title="生命保険料控除分析ツール", page_icon="💰", layout="wide")
@@ -112,7 +201,7 @@ def show_home_page():
         )
 
         # 控除額を計算
-        calculator = LifeInsuranceDeductionCalculator()
+        calculator = _get_deduction_calculator()
         quick_deduction = calculator.calculate_old_deduction(quick_premium)
 
         # 月保険料を自動計算
@@ -226,7 +315,7 @@ def _show_basic_deduction_calculator():
         st.subheader("📊 計算結果")
 
         # 控除額計算と税額計算（税金ヘルパーを使用）
-        tax_helper = get_tax_helper()
+        tax_helper = _get_tax_helper_cached()
         savings = tax_helper.calculate_annual_tax_savings(annual_premium, taxable_income)
 
         st.metric("控除額", f"{savings['deduction']:,.0f}円")
@@ -357,31 +446,12 @@ def _show_detailed_plan_analysis():
         st.success("分析を実行中...")
         # 年間保険料計算
         annual_premium = monthly_premium * 12
-        # 基本値取得
-        base_year = withdrawal_year
-        base_rate = 0.5
-        # ±5年範囲生成
-        year_range = list(range(max(5, base_year - 5), min(contract_years, base_year + 5) + 1))
-        # ±50%範囲生成（0.01～1.0, 0.1刻み）
-        rate_min = max(0.01, base_rate - 0.5)
-        rate_max = min(1.0, base_rate + 0.5)
-        rate_range = [round(r, 2) for r in list(np.arange(rate_min, rate_max + 0.01, 0.1)) if r > 0]
-        interval_range = [1, 2, 3, 4, 5]
-        switch_rates = [0.01, 0.02, 0.03, 0.04, 0.05]
-        # 複数戦略同時比較
-        optimizer = WithdrawalOptimizer()
-        df_strategies = optimizer.analyze_all_strategies(
-            initial_premium=0,
+        df_strategies = _analyze_all_strategies_cached(
             annual_premium=annual_premium,
-            taxable_income=annual_income,
-            policy_start_year=2025 - base_year,
-            interval_range=interval_range,
-            rate_range=rate_range,
-            full_withdrawal_years=year_range,
-            switch_years=year_range,
-            switch_rates=switch_rates,
-            max_years=contract_years,
-            return_rate=annual_interest_rate,
+            annual_income=annual_income,
+            base_year=withdrawal_year,
+            contract_years=contract_years,
+            annual_interest_rate=annual_interest_rate,
             withdrawal_reinvest_rate=withdrawal_reinvest_rate,
         )
         st.markdown("## 🏆 戦略ランキング（±5年±50％範囲）")
@@ -420,7 +490,7 @@ def show_deduction_calculator():
         st.subheader("📊 計算結果")
 
         # 税金ヘルパーで計算
-        tax_helper = get_tax_helper()
+        tax_helper = _get_tax_helper_cached()
         tax_result = tax_helper.calculate_annual_tax_savings(annual_premium, taxable_income)
 
         # 結果表示
@@ -513,11 +583,7 @@ def show_withdrawal_optimizer():
 
     if st.button("🚀 最適化分析を実行", type="primary", key="run_optimization"):
         with st.spinner("最適化計算中..."):
-            # WithdrawalOptimizerのインスタンス作成
-            optimizer = WithdrawalOptimizer()
-
-            # 最適タイミング分析
-            best_timing, all_results = optimizer.optimize_withdrawal_timing(
+            best_timing, all_results = _optimize_withdrawal_timing_cached(
                 annual_premium, taxable_income, policy_start_year, max_years, return_rate
             )
 
@@ -684,14 +750,12 @@ def show_withdrawal_optimizer():
 
         if st.button("📊 シナリオ分析を実行", key="run_scenario_analysis"):
             with st.spinner("シナリオ分析中..."):
-                optimizer = WithdrawalOptimizer()
-
-                income_scenarios = [
+                income_scenarios = (
                     (scenario_name_1, scenario_income_1),
                     (scenario_name_2, scenario_income_2),
-                ]
+                )
 
-                scenario_results = optimizer.analyze_income_scenarios(
+                scenario_results = _analyze_income_scenarios_cached(
                     annual_premium,
                     taxable_income,
                     income_scenarios,
@@ -1177,7 +1241,7 @@ def show_sensitivity_analysis():
             )
 
             # InsuranceCalculatorで計算
-            calculator = InsuranceCalculator()
+            calculator = _get_insurance_calculator()
             result = calculator.calculate_simple_value(insurance_plan, taxable_income=annual_income)
 
             # 正味利益 = (保険価値 + 節税効果) - 支払保険料総額

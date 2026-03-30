@@ -21,6 +21,53 @@ if PROJECT_ROOT not in sys.path:
 import pension_calc.core.pension_utils as putils
 
 
+@st.cache_data(show_spinner=False)
+def _get_career_model_cached(kind: str, to_yen: bool) -> pd.DataFrame:
+    return putils.get_career_model(kind, to_yen=to_yen)
+
+
+def _interpolate_model_income(career_df: pd.DataFrame, age: int, income_col: str) -> float:
+    matching_rows = career_df[career_df["年齢"] == age]
+    if len(matching_rows) > 0:
+        return float(matching_rows.iloc[0][income_col])
+    if age < career_df["年齢"].min():
+        return float(career_df.iloc[0][income_col])
+    if age > career_df["年齢"].max():
+        return float(career_df.iloc[-1][income_col])
+
+    lower_age = career_df[career_df["年齢"] < age]["年齢"].max()
+    upper_age = career_df[career_df["年齢"] > age]["年齢"].min()
+    lower_income = float(career_df[career_df["年齢"] == lower_age].iloc[0][income_col])
+    upper_income = float(career_df[career_df["年齢"] == upper_age].iloc[0][income_col])
+    ratio = (age - lower_age) / (upper_age - lower_age)
+    return lower_income + (upper_income - lower_income) * ratio
+
+
+@st.cache_data(show_spinner=False)
+def _build_scaled_career_projection(
+    career_model_kind: str,
+    current_age: int,
+    retirement_age: int,
+    base_income_yen: int,
+) -> Dict[str, object]:
+    career_df = putils.get_career_model(career_model_kind, to_yen=True)
+    model_current_income = _interpolate_model_income(career_df, current_age, "推定年収(円)")
+    scale_factor = base_income_yen / model_current_income if model_current_income > 0 else 1.0
+
+    remaining_years = max(0, retirement_age - current_age)
+    future_incomes = []
+    for i in range(remaining_years):
+        future_age = current_age + i
+        model_income = _interpolate_model_income(career_df, future_age, "推定年収(円)")
+        future_incomes.append(model_income * scale_factor)
+
+    return {
+        "career_df": career_df,
+        "scale_factor": scale_factor,
+        "future_incomes": future_incomes,
+    }
+
+
 def main() -> None:
     # ページ設定
     st.set_page_config(page_title="年金シミュレーター", page_icon="📊", layout="wide")
@@ -148,7 +195,7 @@ def main() -> None:
             st.write(f"**現在選択中**: {career_model_kind}モデル")
 
             try:
-                current_model_df = putils.get_career_model(career_model_kind, to_yen=False)
+                current_model_df = _get_career_model_cached(career_model_kind, to_yen=False)
                 if len(current_model_df) > 0:
                     st.markdown("**選択中モデルの内容**:")
                     for _, row in current_model_df.iterrows():
@@ -294,48 +341,15 @@ def main() -> None:
 
         # 将来予測の年収を取得（tab4と同じロジック）
         remaining_years = max(0, int(retirement_age) - int(current_age))
-        career_df = putils.get_career_model(career_model_kind, to_yen=True)
-        
-        # スケール係数を計算
-        current_age_int = int(current_age)
-        matching_rows = career_df[career_df["年齢"] == current_age_int]
-        if len(matching_rows) > 0:
-            model_current_income = matching_rows.iloc[0]["推定年収(円)"]
-        else:
-            if current_age_int < career_df["年齢"].min():
-                model_current_income = career_df.iloc[0]["推定年収(円)"]
-            elif current_age_int > career_df["年齢"].max():
-                model_current_income = career_df.iloc[-1]["推定年収(円)"]
-            else:
-                lower_age = career_df[career_df["年齢"] < current_age_int]["年齢"].max()
-                upper_age = career_df[career_df["年齢"] > current_age_int]["年齢"].min()
-                lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
-                upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
-                ratio = (current_age_int - lower_age) / (upper_age - lower_age)
-                model_current_income = lower_income + (upper_income - lower_income) * ratio
-        
-        scale_factor = base_income_yen / model_current_income if model_current_income > 0 else 1.0
-        
-        # 将来の年収リストを作成
-        future_incomes = []
-        for i in range(remaining_years):
-            future_age = int(current_age) + i
-            matching_rows = career_df[career_df["年齢"] == future_age]
-            if len(matching_rows) > 0:
-                model_income = matching_rows.iloc[0]["推定年収(円)"]
-            else:
-                if future_age < career_df["年齢"].min():
-                    model_income = career_df.iloc[0]["推定年収(円)"]
-                elif future_age > career_df["年齢"].max():
-                    model_income = career_df.iloc[-1]["推定年収(円)"]
-                else:
-                    lower_age = career_df[career_df["年齢"] < future_age]["年齢"].max()
-                    upper_age = career_df[career_df["年齢"] > future_age]["年齢"].min()
-                    lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
-                    upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
-                    ratio = (future_age - lower_age) / (upper_age - lower_age)
-                    model_income = lower_income + (upper_income - lower_income) * ratio
-            future_incomes.append(model_income * scale_factor)
+        projection = _build_scaled_career_projection(
+            career_model_kind=career_model_kind,
+            current_age=int(current_age),
+            retirement_age=int(retirement_age),
+            base_income_yen=base_income_yen,
+        )
+        career_df = projection["career_df"]
+        scale_factor = projection["scale_factor"]
+        future_incomes = projection["future_incomes"]
 
         # 将来予測を含めた年金受給額計算
         pension_res = calculator.calculate_future_pension(
@@ -414,34 +428,15 @@ def main() -> None:
         remaining_years = max(0, int(retirement_age) - int(current_age))
         
         # キャリアモデルから将来年収を取得
-        career_df = putils.get_career_model(career_model_kind, to_yen=True)
+        projection = _build_scaled_career_projection(
+            career_model_kind=career_model_kind,
+            current_age=int(current_age),
+            retirement_age=int(retirement_age),
+            base_income_yen=base_income_yen,
+        )
+        career_df = projection["career_df"]
         current_year = pd.Timestamp.now().year
-        
-        # 現在の年収を基準にキャリアモデルをスケール調整
-        # 現在年齢のキャリアモデル年収を取得
-        current_age_int = int(current_age)
-        model_current_income = None
-        
-        # 現在年齢のモデル年収を取得（補間含む）
-        matching_rows = career_df[career_df["年齢"] == current_age_int]
-        if len(matching_rows) > 0:
-            model_current_income = matching_rows.iloc[0]["推定年収(円)"]
-        else:
-            # 補間
-            if current_age_int < career_df["年齢"].min():
-                model_current_income = career_df.iloc[0]["推定年収(円)"]
-            elif current_age_int > career_df["年齢"].max():
-                model_current_income = career_df.iloc[-1]["推定年収(円)"]
-            else:
-                lower_age = career_df[career_df["年齢"] < current_age_int]["年齢"].max()
-                upper_age = career_df[career_df["年齢"] > current_age_int]["年齢"].min()
-                lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
-                upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
-                ratio = (current_age_int - lower_age) / (upper_age - lower_age)
-                model_current_income = lower_income + (upper_income - lower_income) * ratio
-        
-        # スケール係数を計算（現在の年収 / モデルの現在年齢年収）
-        scale_factor = base_income_yen / model_current_income if model_current_income > 0 else 1.0
+        scale_factor = projection["scale_factor"]
         
         years_axis = []
         incomes = []
@@ -451,23 +446,7 @@ def main() -> None:
             future_year = current_year + i
             
             # キャリアモデルから該当年齢の年収を取得
-            matching_rows = career_df[career_df["年齢"] == future_age]
-            if len(matching_rows) > 0:
-                model_income = matching_rows.iloc[0]["推定年収(円)"]
-            else:
-                # キャリアモデルにない年齢の場合は線形補間または最後の値を使用
-                if future_age < career_df["年齢"].min():
-                    model_income = career_df.iloc[0]["推定年収(円)"]
-                elif future_age > career_df["年齢"].max():
-                    model_income = career_df.iloc[-1]["推定年収(円)"]
-                else:
-                    # 線形補間
-                    lower_age = career_df[career_df["年齢"] < future_age]["年齢"].max()
-                    upper_age = career_df[career_df["年齢"] > future_age]["年齢"].min()
-                    lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
-                    upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
-                    ratio = (future_age - lower_age) / (upper_age - lower_age)
-                    model_income = lower_income + (upper_income - lower_income) * ratio
+            model_income = _interpolate_model_income(career_df, future_age, "推定年収(円)")
             
             # スケール調整後の年収
             income = model_income * scale_factor
@@ -564,7 +543,7 @@ def main() -> None:
 
             # キャリアモデルデータの取得
             try:
-                career_model_df = putils.get_career_model(career_model_kind, to_yen=False)
+                career_model_df = _get_career_model_cached(career_model_kind, to_yen=False)
             except:
                 career_model_df = pd.DataFrame()
 
@@ -878,48 +857,13 @@ def main() -> None:
             
             # 将来予測の年収を取得（tab3と同じロジック）
             remaining_years = max(0, int(retirement_age) - int(current_age))
-            career_df = putils.get_career_model(career_model_kind, to_yen=True)
-            
-            # スケール係数を計算
-            current_age_int = int(current_age)
-            matching_rows = career_df[career_df["年齢"] == current_age_int]
-            if len(matching_rows) > 0:
-                model_current_income = matching_rows.iloc[0]["推定年収(円)"]
-            else:
-                if current_age_int < career_df["年齢"].min():
-                    model_current_income = career_df.iloc[0]["推定年収(円)"]
-                elif current_age_int > career_df["年齢"].max():
-                    model_current_income = career_df.iloc[-1]["推定年収(円)"]
-                else:
-                    lower_age = career_df[career_df["年齢"] < current_age_int]["年齢"].max()
-                    upper_age = career_df[career_df["年齢"] > current_age_int]["年齢"].min()
-                    lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
-                    upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
-                    ratio = (current_age_int - lower_age) / (upper_age - lower_age)
-                    model_current_income = lower_income + (upper_income - lower_income) * ratio
-            
-            scale_factor = base_income_yen / model_current_income if model_current_income > 0 else 1.0
-            
-            # 将来の年収リストを作成
-            future_incomes = []
-            for i in range(remaining_years):
-                future_age = int(current_age) + i
-                matching_rows = career_df[career_df["年齢"] == future_age]
-                if len(matching_rows) > 0:
-                    model_income = matching_rows.iloc[0]["推定年収(円)"]
-                else:
-                    if future_age < career_df["年齢"].min():
-                        model_income = career_df.iloc[0]["推定年収(円)"]
-                    elif future_age > career_df["年齢"].max():
-                        model_income = career_df.iloc[-1]["推定年収(円)"]
-                    else:
-                        lower_age = career_df[career_df["年齢"] < future_age]["年齢"].max()
-                        upper_age = career_df[career_df["年齢"] > future_age]["年齢"].min()
-                        lower_income = career_df[career_df["年齢"] == lower_age].iloc[0]["推定年収(円)"]
-                        upper_income = career_df[career_df["年齢"] == upper_age].iloc[0]["推定年収(円)"]
-                        ratio = (future_age - lower_age) / (upper_age - lower_age)
-                        model_income = lower_income + (upper_income - lower_income) * ratio
-                future_incomes.append(model_income * scale_factor)
+            projection = _build_scaled_career_projection(
+                career_model_kind=career_model_kind,
+                current_age=int(current_age),
+                retirement_age=int(retirement_age),
+                base_income_yen=base_income_yen,
+            )
+            future_incomes = projection["future_incomes"]
             
             # 将来予測を含めた年金受給額計算
             pension_calc_res = calculator.calculate_future_pension(

@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime
 import sys
 import os
+from pathlib import Path
 
 # モジュールのインポート
 sys.path.append(os.path.dirname(os.path.abspath(__file__)).rsplit(os.sep, 2)[0])
@@ -43,14 +44,34 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# セッション状態の初期化
-if 'brand_master' not in st.session_state:
-    st.session_state.brand_master = get_brand_master()
 
-if 'nisa_data' not in st.session_state:
-    st.session_state.nisa_data = load_nisa_data()
+NISA_DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "nisa_monthly_data.csv"
+
+
+@st.cache_resource
+def _load_brand_master_resource():
+    return get_brand_master()
+
+
+def _get_nisa_data_mtime() -> float:
+    return NISA_DATA_FILE.stat().st_mtime if NISA_DATA_FILE.exists() else 0.0
+
+
+@st.cache_data(show_spinner=False)
+def _load_nisa_data_cached(file_mtime: float) -> pd.DataFrame:
+    _ = file_mtime
+    return load_nisa_data()
+
+
+def _ensure_session_state() -> None:
+    if 'brand_master' not in st.session_state:
+        st.session_state.brand_master = _load_brand_master_resource()
+    if 'nisa_data' not in st.session_state:
+        st.session_state.nisa_data = _load_nisa_data_cached(_get_nisa_data_mtime())
 
 def main():
+    _ensure_session_state()
+
     # サイドバー
     with st.sidebar:
         st.header("🎯 設定")
@@ -61,12 +82,14 @@ def main():
         with col1:
             if st.button("💾 保存", key="save_data_btn"):
                 if save_nisa_data(st.session_state.nisa_data):
+                    _load_nisa_data_cached.clear()
                     st.success("✅ 保存完了")
                 else:
                     st.error("❌ 保存失敗")
         with col2:
             if st.button("🔄 再読込", key="reload_data_btn"):
-                st.session_state.nisa_data = load_nisa_data()
+                _load_nisa_data_cached.clear()
+                st.session_state.nisa_data = _load_nisa_data_cached(_get_nisa_data_mtime())
                 st.success("✅ 再読込完了")
                 st.rerun()
     
