@@ -1,203 +1,108 @@
-# 部分解約後の資金運用について
+# 部分解約と再投資ガイド
+
+> このファイルの目的: life_insurance の部分解約戦略で、解約金がどのように再投資されるかを現行実装ベースで説明する。
+
+最終更新: 2026年03月30日  
+位置づけ: 現行機能ガイド  
+実行コマンドの正本: [README.md](README.md)
 
 ## 概要
 
-部分解約戦略では、保険から定期的に資金を引き出します。この引き出した資金は、以下のいずれかの方法で運用されることを想定しています。
+life_insurance の部分解約戦略は、保険残高の一部を一定間隔で解約し、その手取り資金を再投資または現金保有として扱うシミュレーションです。
 
-## 資金の行き先オプション
+現行の中心ロジックは [life_insurance/analysis/insurance_calculator.py](life_insurance/analysis/insurance_calculator.py) の `calculate_partial_withdrawal_value()` にあります。
 
-### 1. 💰 預金（年利1%）【デフォルト】
-- **想定**: 普通預金・定期預金での保管
-- **年利**: 1%
-- **特徴**: 
-  - 元本保証
-  - 低リスク・低リターン
-  - すぐに現金化可能
-  - 現実的な選択肢
+## いまの計算モデル
 
-### 2. 🏦 運用なし（現金保有）
-- **想定**: 現金として手元で保有
-- **年利**: 0%
-- **特徴**:
-  - 完全なリスク回避
-  - インフレの影響を直接受ける
-  - 最も保守的な選択肢
+現行実装では、次の流れで月次シミュレーションを行います。
 
-### 3. 📈 投資信託（年利3%）
-- **想定**: 国内債券型・バランス型ファンド
-- **年利**: 3%
-- **特徴**:
-  - 中リスク・中リターン
-  - 市場変動の影響あり
-  - 長期運用向け
+1. 毎月の保険料を積み立てる
+2. 保険残高に運用利回りを反映する
+3. 残高手数料を差し引く
+4. 再投資残高があれば月次複利で増減させる
+5. 指定年に達したら部分解約を行う
+6. 解約手数料と一時所得ベースの解約課税を差し引く
+7. 手取り額を再投資残高へ加える
+8. 期間終了時に残りの保険を最終解約し、必要なら再投資課税も反映する
 
-### 4. 🚀 投資信託（年利5%）
-- **想定**: 株式型ファンド（S&P500等）
-- **年利**: 5%
-- **特徴**:
-  - 高リスク・高リターン
-  - 市場変動の影響大
-  - 長期運用で期待リターンが高い
+### 主な入力パラメータ
 
-### 5. ⚙️ カスタム
-- **想定**: ユーザー独自の運用計画
-- **年利**: 任意（0%～20%）
-- **特徴**:
-  - 柔軟な設定が可能
-  - 独自の投資戦略を反映
+- `withdrawal_interval`: 何年ごとに部分解約するか
+- `withdrawal_ratio`: 1 回あたりに残高の何割を解約するか
+- `withdrawal_fee_rate`: 解約時手数料率
+- `taxable_income`: 一時所得計算に使う課税所得
+- `reinvestment_plan`: 再投資先の条件
 
-## 計算ロジック
+### 主な出力
 
-### 部分解約のシミュレーション
+- `insurance_value`: 最終的な保険側の手取り額
+- `reinvestment_value`: 再投資側の手取り額
+- `withdrawal_tax`: 部分解約と最終解約で発生した税額
+- `reinvestment_tax`: 再投資側の課税額
+- `net_value`: 保険と再投資を合算した最終手取り額
+- `tax_benefit`: 生命保険料控除による節税効果
 
-```python
-# 初期値
-withdrawn_funds = 0  # 解約済み資金（運用後）
-remaining_balance = 保険残高
+## UI で選べる再投資先
 
-# 毎年の処理
-for 年 in range(1, 契約年数+1):
-    # 1. 既に解約した資金を運用（複利）
-    withdrawn_funds *= (1 + 再投資利回り)
-    
-    # 2. 保険の残高を計算
-    remaining_balance = 保険解約返戻金
-    
-    # 3. 定期的に部分解約を実行
-    if 年 % 解約間隔 == 0:
-        解約額 = remaining_balance × 解約割合
-        withdrawn_funds += 解約額
-        remaining_balance -= 解約額
+現行 UI では [life_insurance/ui/streamlit_app.py](life_insurance/ui/streamlit_app.py) の部分解約戦略画面から、次の選択肢を使います。
 
-# 最終的な資産価値
-総資産 = withdrawn_funds + remaining_balance
-純利益 = 総資産 + 節税効果 - 払込保険料
-```
+- `投資信託`
+- `現金保有`
+- `混合（50%-50%）`
+- `NISA枠活用`
 
-### 具体例（15年後、2年ごとに51%解約）
+実装上の扱いは次の通りです。
 
-| シナリオ | 再投資利回り | 部分解約純利益 | 全解約純利益 | 差額 |
-|---------|-------------|---------------|------------|------|
-| 運用なし | 0% | 597万円 | 53万円 | **+544万円** |
-| 預金 | 1% | 637万円 | 53万円 | **+584万円** |
-| 投資信託（低） | 3% | 729万円 | 53万円 | **+676万円** |
-| 投資信託（高） | 5% | 838万円 | 53万円 | **+785万円** |
+- `現金保有`: 再投資利回りを 0 として扱う
+- `投資信託`: 再投資利回りを固定値で与える
+- `混合（50%-50%）`: 中間的な固定値で与える
+- `NISA枠活用`: 再投資自体は行うが、再投資課税を非課税扱いにする
 
-## 重要なポイント
+補足:
 
-### ✅ メリット
+- 現行 UI の再投資先は説明用のプリセットです
+- 任意利回りの細かい指定はコア関数では可能ですが、UI では固定プリセットを内部変換して使っています
+- 古い文書にあった `預金 1% / 投資信託 3% / 5%` という整理は、現行 UI の選択肢とは一致しません
 
-1. **資金流動性の向上**
-   - 必要なタイミングで資金を引き出せる
-   - 全解約まで待つ必要がない
+## NISA の扱い
 
-2. **再投資による収益機会**
-   - 保険よりも高利回りの商品に再投資可能
-   - 市場環境に応じた柔軟な運用
+[life_insurance/models/fund_plan.py](life_insurance/models/fund_plan.py) の `use_nisa` が `True` の場合、再投資側の最終課税を 0 として扱います。
 
-3. **リスク分散**
-   - 一度に全額を引き出さない
-   - 市場タイミングリスクを分散
+現行テストでも次を確認しています。
 
-### ⚠️ 注意点
+- [life_insurance/tests/test_insurance_calculator_core.py](life_insurance/tests/test_insurance_calculator_core.py): NISA 利用時は `reinvestment_tax == 0.0`
+- [life_insurance/tests/test_insurance_calculator_core.py](life_insurance/tests/test_insurance_calculator_core.py): 非課税でない場合より `net_value` が大きくなる
 
-1. **税務上の扱い**
-   - 部分解約ごとに一時所得が発生する可能性
-   - （現在の実装では簡易的に計算）
+## 現行 UI の操作導線
 
-2. **手数料**
-   - 実際の保険では部分解約手数料がかかる場合がある
-   - （現在の実装では0%と仮定）
+1. [life_insurance/ui/streamlit_app.py](life_insurance/ui/streamlit_app.py) の統合アプリを開く
+2. 部分解約戦略セクションへ移動する
+3. `解約間隔（年）` を選ぶ
+4. `1回あたりの解約割合` を設定する
+5. `解約金の再投資先` を選ぶ
+6. `解約手数料率` と `課税所得` を入力する
+7. `部分解約戦略を計算` を実行する
 
-3. **市場リスク**
-   - 再投資先の利回りは保証されない
-   - 市場環境により損失の可能性
+画面上では、解約スケジュール、残存割合、累積解約割合、試算結果を確認できます。
 
-## UI での使い方
+## 実装上の注意点
 
-### ステップ 1: 詳細分析画面を開く
-サイドバーで「詳細分析（戦略ランキング）」を選択
+- [life_insurance/models/insurance_plan.py](life_insurance/models/insurance_plan.py) では `withdrawal_fee_rate` の初期値が 1% です
+- [life_insurance/analysis/insurance_calculator.py](life_insurance/analysis/insurance_calculator.py) では最終解約時にも課税計算を行います
+- 再投資課税は現行実装では推定利益率ベースの簡略モデルです
+- `reinvestment_plan=None` の場合は、再投資なしの現金保有として扱われます
 
-### ステップ 2: 基本パラメータを設定
-- 月払保険料: 9,000円
-- 年利: 1.25%
-- 契約期間: 20年
-- 課税所得: 600万円
+## テスト観点
 
-### ステップ 3: 再投資オプションを選択
-**「💰 部分解約後の資金運用」セクションで選択**
+部分解約と再投資の主要な保証は次のテストで見ます。
 
-- デフォルト: 預金（年利1%）
-- 保守的: 運用なし（現金保有）
-- 積極的: 投資信託（年利3%～5%）
-- カスタム: 独自の利回り設定
+- [life_insurance/tests/test_insurance_calculator_core.py](life_insurance/tests/test_insurance_calculator_core.py): 基本的な部分解約計算
+- [life_insurance/tests/test_insurance_calculator_core.py](life_insurance/tests/test_insurance_calculator_core.py): NISA 再投資の非課税差分
+- [life_insurance/tests/test_insurance_calculator_core.py](life_insurance/tests/test_insurance_calculator_core.py): 再投資なしケース
+- [life_insurance/tests/test_models.py](life_insurance/tests/test_models.py): `FundPlan` と `InsurancePlan` の妥当性
 
-### ステップ 4: 分析を実行
-「📊 詳細分析を実行」ボタンをクリック
+## 関連ドキュメント
 
-### ステップ 5: 結果を確認
-戦略ランキング表で部分解約戦略の純利益を確認
-
-## 実務的な考察
-
-### 現実的な運用シナリオ
-
-**ケース1: 保守的な運用（預金1%）**
-- 部分解約した資金を定期預金で運用
-- 元本保証で安全性重視
-- 結果: 全解約より約584万円の利益増加
-
-**ケース2: バランス型運用（投資信託3%）**
-- eMAXIS Slim バランス（8資産均等型）等
-- リスクを抑えながら適度なリターン
-- 結果: 全解約より約676万円の利益増加
-
-**ケース3: 積極的運用（投資信託5%）**
-- eMAXIS Slim 米国株式（S&P500）等
-- 長期運用で高リターンを狙う
-- 結果: 全解約より約785万円の利益増加
-
-### 最適戦略の選び方
-
-1. **リスク許容度を確認**
-   - 元本保証が必要 → 預金
-   - 変動リスクOK → 投資信託
-
-2. **運用期間を考慮**
-   - 短期（5年未満） → 預金
-   - 長期（10年以上） → 投資信託
-
-3. **税務上の最適化**
-   - 所得が高い年は解約を避ける
-   - 退職後など所得が下がる年に集中解約
-
-## 技術仕様
-
-### 実装ファイル
-- `life_insurance/analysis/withdrawal_optimizer.py`
-  - `_calculate_partial_withdrawal_benefit()`: 部分解約の純利益計算
-  - `withdrawal_reinvest_rate` パラメータ: 再投資利回り設定
-
-- `life_insurance/ui/streamlit_app.py`
-  - 再投資オプションの UI 実装
-  - ユーザー選択を `withdrawal_reinvest_rate` に変換
-
-### デフォルト値
-```python
-withdrawal_reinvest_rate = 0.01  # 1%（預金想定）
-```
-
-## まとめ
-
-✅ **部分解約後の資金は「預金（1%）」で再投資されることがデフォルト**
-
-✅ **ユーザーは運用先を自由に選択可能**（運用なし～投資信託まで）
-
-✅ **再投資利回りが高いほど、部分解約戦略の優位性が向上**
-
-✅ **現実的な比較により、より実践的な戦略選択が可能**
-
-💡 **推奨**: 
-- 保守的な方 → 預金（1%）
-- バランス重視 → 投資信託（3%）
-- 積極的な方 → 投資信託（5%）
+- [docs/LIFE_INSURANCE_STRUCTURE.md](docs/LIFE_INSURANCE_STRUCTURE.md): 生命保険モジュール全体構成
+- [docs/INDEX.md](docs/INDEX.md): docs の入口
+- [docs/FEATURE_COMPARISON.md](docs/FEATURE_COMPARISON.md): 残る比較系ドキュメント

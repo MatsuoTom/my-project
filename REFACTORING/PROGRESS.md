@@ -1,11 +1,16 @@
 # 📈 リファクタリング進捗トラッキング
 
-**最終更新:** 2025年10月27日  
+> このファイルの目的: リファクタリング作業の進捗・実績・完了状況を記録する。
+
+**最終更新:** 2026年03月30日  
 **開始日:** 2025年10月25日
 
 ---
 
 ## 🎯 全体進捗
+
+> 注記: 下表は 2025 年時点の「大規模リファクタリング計画」進捗です。  
+> 2026-03-30 に実施した構成整備（フォルダ運用改善）は、この後の「構成整備トラック」に記録します。
 
 | Phase | 状態 | 進捗率 | 開始日 | 完了日 | 備考 |
 |-------|------|--------|--------|--------|------|
@@ -15,6 +20,39 @@
 | **Phase 4** | ⚪ 未着手 | 0% | - | - | UI層最適化 |
 
 **総合進捗:** � 25% (1/4 Phase完了、Phase 1: 100%完了 ✅)
+
+---
+
+## 🧭 構成整備トラック（2026-03-30 反映）
+
+このトラックは、現行運用に合わせた構成・管理ルールの整備を目的とした作業記録です。
+
+| Phase | 状態 | 実施内容 |
+|-------|------|----------|
+| **Phase 1** | ✅ 完了 | README / pyproject の実構成整合 |
+| **Phase 2** | ✅ 完了 | 生成データの非追跡化（saved_plans など） |
+| **Phase 3** | ✅ 完了 | docs 正本 / REFACTORING 履歴の責務分離、導線整備 |
+
+### 反映済み項目
+
+- `.gitignore` にローカル生成データ除外ルールを追加
+- `vehicle_finance/data/saved_plans/` を Git 追跡対象から除外（作業ツリー上の実ファイルは保持）
+- `docs/DOCUMENTATION_STRUCTURE.md` を追加
+- `docs/INDEX.md` を追加
+- `REFACTORING/INDEX.md` / `REFACTORING/README.md` に docs 正本方針を追記
+- `archive/README.md` を追加して保存方針を明文化
+- `README.md` に `main.py` / `scripts/` の役割分担を追記
+- `docs/CONTRIBUTING.md` に文書配置ルールを追記
+- `docs/INDEX.md` に棚卸しメモを追加
+- `docs/DOCS_INVENTORY.md` を追加して docs 配下の文書分類を可視化
+- `docs/LIFE_INSURANCE_STRUCTURE.md` を現構成ベースへ更新
+- `docs/WITHDRAWAL_REINVESTMENT_GUIDE.md` を現行 UI / 実装ベースへ更新
+- `docs/FEATURE_COMPARISON.md` を現行4ドメイン比較へ更新
+- テスト実行結果: 462 passed, 1 skipped（warning 解消済み）
+
+### 残タスク
+
+- 構成整備トラック上の主要タスクは完了。以後は個別ドキュメントや履歴資料の継続メンテナンスを行う
 
 ---
 

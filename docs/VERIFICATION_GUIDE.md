@@ -24,10 +24,12 @@
 
 ## 動作確認手順
 
+共通の仮想環境有効化・起動コマンドは `README.md` を正本とします。  
+このガイドでは、戦略ランキング機能の確認に必要な差分手順のみを記載します。
+
 ### ステップ 1: Streamlit アプリの起動
 
 ```powershell
-.venv\Scripts\Activate.ps1
 streamlit run life_insurance\ui\streamlit_app.py
 ```
 
@@ -77,7 +79,7 @@ streamlit run life_insurance\ui\streamlit_app.py
 `analyze_all_strategies` メソッドの単体テストも用意しています：
 
 ```powershell
-python test_analyze_all_strategies.py
+python tests/test_analyze_all_strategies.py
 ```
 
 **期待される出力:**

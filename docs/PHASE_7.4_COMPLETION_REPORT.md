@@ -1,5 +1,7 @@
 # Phase 7.4 完了レポート: CI/CD構築
 
+> これは履歴レポートです。現行の実行手順・検証手順の正本は `README.md` と `docs/` を参照してください。
+
 **実施日**: 2025年11月8日  
 **担当**: GitHub Copilot AI Agent  
 **Phase**: 7.4 - GitHub Actions CI/CDパイプライン構築
